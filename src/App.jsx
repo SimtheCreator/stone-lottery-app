@@ -17,6 +17,12 @@ const getLogTime = (log) => getTimeValue(log.timestamp);
 
 const getParticipantId = (name) => encodeURIComponent(name.trim().toLowerCase());
 
+const formatRitualText = (text = '') => (
+  String(text)
+    .replace(/จอมเวทย์/g, 'จอมเวท')
+    .replace(/รหัส\s+(.+?)\s+ได้จองหมายเลข\s+(\d{1,2})\s+แล้ว/g, 'จอมเวท $1 ได้ผนึกหมายเลข $2 แล้ว')
+);
+
 const isPermissionError = (error) => (
   error?.code === 'permission-denied'
   || error?.message?.toLowerCase().includes('permission')
@@ -45,7 +51,7 @@ function RitualTopPanels({ currentUser, logs, claimedCount, availableCount }) {
             ยินดีต้อนรับ, <strong className="gold-text">{currentUser}</strong>
           </p>
           <ul>
-            <li>หนึ่งจอมเวทย์เลือกเลขได้ <strong>1 หมายเลขเด็ด</strong> เท่านั้นในแต่ละรอบ</li>
+            <li>หนึ่งจอมเวทเลือกเลขได้ <strong>1 หมายเลขเด็ด</strong> เท่านั้นในแต่ละรอบ</li>
             <li><strong>วิถีแห่งความเร็ว:</strong> ผู้ใดจารึกตัวเลขก่อน จักได้เป็นเจ้าของพลังงานเลขนั้นทันที ห้ามซ้ำกันโดยเด็ดขาด!</li>
           </ul>
         </div>
@@ -62,7 +68,7 @@ function RitualTopPanels({ currentUser, logs, claimedCount, availableCount }) {
               key={log.id}
               className={`log-item ${log.type === 'claimed' ? 'claimed-log' : ''}`}
             >
-              {log.text}
+              {formatRitualText(log.text)}
             </div>
           ))}
         </div>
@@ -100,7 +106,7 @@ function AdminDashboard({ isOpen, onClose, selections, logs, archives, onReset }
 
         <div className="dashboard-stat-grid">
           <div className="dashboard-stat">
-            <span>จองสำเร็จ</span>
+            <span>จารึกสำเร็จ</span>
             <strong>{claimedCount}</strong>
             <small>จากทั้งหมด 100 หมายเลข</small>
           </div>
@@ -143,7 +149,7 @@ function AdminDashboard({ isOpen, onClose, selections, logs, archives, onReset }
               {logs.slice(-8).reverse().map((log) => (
                 <div className="admin-row log-row" key={log.id}>
                   <span>{log.type === 'claimed' ? 'จารึก' : 'ระบบ'}</span>
-                  <small>{log.text}</small>
+                  <small>{formatRitualText(log.text)}</small>
                 </div>
               ))}
             </div>
@@ -178,6 +184,64 @@ function AdminDashboard({ isOpen, onClose, selections, logs, archives, onReset }
   );
 }
 
+function AdminLoginModal({ isOpen, password, error, onPasswordChange, onSubmit, onClose }) {
+  if (!isOpen) return null;
+
+  return (
+    <div className="modal-overlay admin-overlay" onClick={onClose}>
+      <section className="admin-login-card" onClick={(event) => event.stopPropagation()}>
+        <button className="icon-close" type="button" onClick={onClose} aria-label="ปิดหน้ารหัส Admin">
+          ✕
+        </button>
+        <div className="join-rune">⚙️</div>
+        <div className="admin-kicker">ห้องลับผู้คุมวงเวท</div>
+        <h2>ยืนยันรหัส Admin</h2>
+        <p>กรุณาใส่รหัสก่อนเข้าสู่ Dashboard หลังบ้าน</p>
+        <form onSubmit={onSubmit}>
+          <div className="input-group">
+            <input
+              type="password"
+              className="name-input"
+              value={password}
+              onChange={(event) => onPasswordChange(event.target.value)}
+              placeholder="กรอกรหัส Admin..."
+              autoFocus
+              required
+            />
+          </div>
+          {error ? <div className="admin-login-error">{error}</div> : null}
+          <button type="submit" className="btn btn-primary" style={{ width: '100%' }}>
+            เข้าสู่ Dashboard
+          </button>
+        </form>
+      </section>
+    </div>
+  );
+}
+
+function RitualNotice({ notice, onClose }) {
+  if (!notice) return null;
+
+  const icon = {
+    success: '✦',
+    error: '⚠',
+    warning: '!',
+  }[notice.type] || '!';
+
+  return (
+    <div className={`ritual-notice ${notice.type || 'warning'}`} role={notice.type === 'error' ? 'alert' : 'status'} aria-live="polite">
+      <div className="ritual-notice-icon">{icon}</div>
+      <div className="ritual-notice-copy">
+        <strong>{notice.title}</strong>
+        <span>{notice.message}</span>
+      </div>
+      <button type="button" className="ritual-notice-close" onClick={onClose} aria-label="ปิดคำเตือน">
+        ✕
+      </button>
+    </div>
+  );
+}
+
 function App() {
   const [selections, setSelections] = useState({});
   const [logs, setLogs] = useState(INITIAL_LOGS);
@@ -185,10 +249,42 @@ function App() {
   const [currentUser, setCurrentUser] = useState('');
   const [isJoined, setIsJoined] = useState(false);
   const [isAdminOpen, setIsAdminOpen] = useState(false);
+  const [isAdminLoginOpen, setIsAdminLoginOpen] = useState(false);
+  const [adminPassword, setAdminPassword] = useState('');
+  const [adminLoginError, setAdminLoginError] = useState('');
+  const [notice, setNotice] = useState(null);
   const canvasRef = useRef(null);
 
   const claimedCount = Object.keys(selections).length;
   const availableCount = 100 - claimedCount;
+  const currentParticipantId = currentUser.trim() ? getParticipantId(currentUser) : '';
+  const currentUserSelection = useMemo(() => {
+    if (!currentParticipantId) return null;
+
+    const entry = Object.entries(selections).find(([, selection]) => (
+      getParticipantId(selection.name || '') === currentParticipantId
+    ));
+
+    if (!entry) return null;
+    const [number, data] = entry;
+    return { number, ...data };
+  }, [currentParticipantId, selections]);
+
+  const showNotice = ({ type = 'warning', title, message }) => {
+    setNotice({
+      id: Date.now(),
+      type,
+      title,
+      message,
+    });
+  };
+
+  useEffect(() => {
+    if (!notice) return undefined;
+
+    const timeout = window.setTimeout(() => setNotice(null), 4600);
+    return () => window.clearTimeout(timeout);
+  }, [notice]);
 
   useEffect(() => {
     const canvas = canvasRef.current;
@@ -252,7 +348,11 @@ function App() {
       setSelections(sel);
     }, (error) => {
       console.error('Selection listener failed', error);
-      alert('ไม่สามารถโหลดข้อมูลหมายเลขได้ กรุณารีเฟรชหน้าอีกครั้ง');
+      showNotice({
+        type: 'error',
+        title: 'โหลดหมายเลขไม่สำเร็จ',
+        message: 'กรุณารีเฟรชหน้าอีกครั้ง หรือแจ้งผู้ดูแลระบบ',
+      });
     });
 
     const unsubLog = onSnapshot(logsCol, (snap) => {
@@ -302,7 +402,11 @@ function App() {
   const handleSelectNumber = async (number) => {
     const trimmedUser = currentUser.trim();
     if (!trimmedUser) {
-      alert('กรุณาระบุชื่อก่อนเลือกหมายเลข');
+      showNotice({
+        type: 'warning',
+        title: 'ยังไม่ได้ระบุตัวตนจอมเวท',
+        message: 'กรุณาระบุตัวตนก่อนเลือกหมายเลข',
+      });
       return false;
     }
 
@@ -311,12 +415,22 @@ function App() {
       getParticipantId(selection.name || '') === participantId
     ));
     if (hasPicked) {
-      alert('คุณได้จองหมายเลขไปแล้ว ไม่สามารถเลือกซ้ำได้ครับ');
+      showNotice({
+        type: 'warning',
+        title: 'จารึกซ้ำไม่ได้',
+        message: currentUserSelection
+          ? `จอมเวทท่านนี้ผนึกหมายเลข ${currentUserSelection.number} แล้ว`
+          : 'จอมเวทท่านนี้ผนึกหมายเลขไปแล้วในรอบนี้',
+      });
       return false;
     }
 
     if (selections[number]) {
-      alert('หมายเลขนี้ถูกเลือกไปแล้วครับ');
+      showNotice({
+        type: 'warning',
+        title: 'หมายเลขนี้ถูกผนึกแล้ว',
+        message: `หมายเลข ${number} ถูกผนึกโดยจอมเวท ${selections[number].name || 'ท่านอื่น'}`,
+      });
       return false;
     }
 
@@ -366,23 +480,75 @@ function App() {
       }
 
       await addDoc(logsCol, {
-        text: `✨ จอมเวทย์ ${trimmedUser} ได้ผนึกหมายเลข ${number} สำเร็จ!`,
+        text: `✨ จอมเวท ${trimmedUser} ได้ผนึกหมายเลข ${number} สำเร็จ!`,
         type: 'claimed',
         timestamp: serverTimestamp(),
       }).catch((error) => {
         console.warn('Log write failed after successful selection', error);
       });
+      showNotice({
+        type: 'success',
+        title: 'ผนึกหมายเลขสำเร็จ',
+        message: `จอมเวท ${trimmedUser} ได้ผนึกหมายเลข ${number} แล้ว`,
+      });
       return true;
     } catch (error) {
       if (error.message === 'USER_ALREADY_PICKED') {
-        alert('คุณได้จองหมายเลขไปแล้ว ไม่สามารถเลือกซ้ำได้ครับ');
+        showNotice({
+          type: 'warning',
+          title: 'จารึกซ้ำไม่ได้',
+          message: currentUserSelection
+            ? `จอมเวทท่านนี้ผนึกหมายเลข ${currentUserSelection.number} แล้ว`
+            : 'จอมเวทท่านนี้ผนึกหมายเลขไปแล้วในรอบนี้',
+        });
       } else if (error.message === 'NUMBER_TAKEN') {
-        alert('หมายเลขนี้ถูกเลือกไปแล้วครับ');
+        showNotice({
+          type: 'warning',
+          title: 'ช้าไปนิดเดียว',
+          message: `หมายเลข ${number} ถูกผนึกไปก่อนแล้ว กรุณาเลือกเลขอื่น`,
+        });
       } else {
         console.error(error);
-        alert('เกิดข้อผิดพลาดในการจองหมายเลข กรุณาลองใหม่อีกครั้ง');
+        showNotice({
+          type: 'error',
+          title: 'ผนึกหมายเลขไม่สำเร็จ',
+          message: 'เกิดข้อผิดพลาด กรุณาลองใหม่อีกครั้ง',
+        });
       }
       return false;
+    }
+  };
+
+  const handleOpenAdminLogin = () => {
+    setAdminLoginError('');
+    setIsAdminLoginOpen(true);
+  };
+
+  const handleAdminLogin = async (event) => {
+    event.preventDefault();
+
+    try {
+      const response = await fetch('/api/admin-check', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ password: adminPassword }),
+      });
+
+      if (response.status === 401) {
+        setAdminLoginError('รหัสผ่านไม่ถูกต้อง');
+        return;
+      }
+
+      if (!response.ok) {
+        throw new Error(`Admin check failed: ${response.status}`);
+      }
+
+      setAdminLoginError('');
+      setIsAdminLoginOpen(false);
+      setIsAdminOpen(true);
+    } catch (error) {
+      console.error(error);
+      setAdminLoginError('ตรวจรหัสไม่ได้ กรุณาลองใหม่อีกครั้ง');
     }
   };
 
@@ -390,18 +556,25 @@ function App() {
     const confirmed = window.confirm('ยืนยันล้างกระดานสำหรับงวดถัดไปหรือไม่? ระบบจะเก็บสถิติงวดนี้ไว้ก่อนล้าง');
     if (!confirmed) return;
 
-    const pwd = prompt('กรุณาใส่รหัสผ่าน Admin เพื่อล้างข้อมูล');
-    if (pwd === null) return;
+    if (!adminPassword) {
+      setIsAdminOpen(false);
+      setIsAdminLoginOpen(true);
+      return;
+    }
 
     try {
       const response = await fetch('/api/reset', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ password: pwd }),
+        body: JSON.stringify({ password: adminPassword }),
       });
 
       if (response.status === 401) {
-        alert('รหัสผ่านไม่ถูกต้อง');
+        showNotice({
+          type: 'error',
+          title: 'รหัส Admin ไม่ถูกต้อง',
+          message: 'กรุณาตรวจสอบรหัสแล้วลองใหม่อีกครั้ง',
+        });
         return;
       }
 
@@ -409,11 +582,19 @@ function App() {
         throw new Error(`Reset failed: ${response.status}`);
       }
 
-      alert('✨ เก็บสถิติและล้างศิลาจารึกสำเร็จ พร้อมเริ่มงวดใหม่!');
+      showNotice({
+        type: 'success',
+        title: 'ล้างกระดานสำเร็จ',
+        message: 'เก็บสถิติงวดเดิมแล้ว พร้อมเริ่มงวดใหม่',
+      });
       setIsAdminOpen(false);
     } catch (e) {
       console.error(e);
-      alert('เกิดข้อผิดพลาดในการล้างข้อมูล');
+      showNotice({
+        type: 'error',
+        title: 'ล้างกระดานไม่สำเร็จ',
+        message: 'กรุณาตรวจค่า Admin หรือ Firebase แล้วลองใหม่',
+      });
     }
   };
 
@@ -433,7 +614,7 @@ function App() {
           <div className="modal-content join-card" style={{ animation: 'none', position: 'relative' }}>
             <div className="join-rune">✦</div>
             <h2>เข้าสู่ลานพิธี</h2>
-            <p className="join-instruction">กรุณาระบุชื่อของท่านจอมเวทย์<br />เพื่อสิทธิ์ในการจองหมายเลข</p>
+            <p className="join-instruction">กรุณาใส่แค่รหัสพนักงานเท่านั้น<br />เพื่อสิทธิ์ในการผนึกหมายเลข</p>
             <form onSubmit={handleJoin}>
               <div className="input-group">
                 <input
@@ -441,13 +622,13 @@ function App() {
                   className="name-input"
                   value={currentUser}
                   onChange={(e) => setCurrentUser(e.target.value)}
-                  placeholder="กรอกชื่อของคุณ..."
+                  placeholder="กรอกรหัสพนักงาน..."
                   maxLength={30}
                   required
                 />
               </div>
               <button type="submit" className="btn btn-primary" style={{ width: '100%' }}>
-                เข้าร่วมพิธีจองหมายเลข
+                เข้าสู่พิธีผนึกหมายเลข
               </button>
             </form>
           </div>
@@ -463,6 +644,8 @@ function App() {
               selections={selections}
               onSelect={handleSelectNumber}
               currentUser={currentUser}
+              currentUserSelection={currentUserSelection}
+              onWarn={showNotice}
             />
             <div className="ritual-footer-actions">
               <button className="btn-magic exit-ritual-btn" type="button" onClick={handleChangeName}>
@@ -476,7 +659,7 @@ function App() {
       <button
         className="admin-reset-btn"
         type="button"
-        onClick={() => setIsAdminOpen(true)}
+        onClick={handleOpenAdminLogin}
         title="Admin Dashboard"
         aria-label="เปิด Dashboard หลังบ้าน"
       >
@@ -491,6 +674,15 @@ function App() {
         archives={archives}
         onReset={handleReset}
       />
+      <AdminLoginModal
+        isOpen={isAdminLoginOpen}
+        password={adminPassword}
+        error={adminLoginError}
+        onPasswordChange={setAdminPassword}
+        onSubmit={handleAdminLogin}
+        onClose={() => setIsAdminLoginOpen(false)}
+      />
+      <RitualNotice notice={notice} onClose={() => setNotice(null)} />
     </>
   );
 }
