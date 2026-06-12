@@ -42,16 +42,22 @@ function StoneBoard({ selections, onSelect, currentUser, currentUserSelection, o
   const playStoneCrackSound = () => {
     try {
       const ctx = new (window.AudioContext || window.webkitAudioContext)();
+      ctx.resume?.();
+      const master = ctx.createGain();
+      master.gain.setValueAtTime(0.72, ctx.currentTime);
+      master.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 2.7);
+      master.connect(ctx.destination);
 
-      const makeNoiseBurst = (start, duration, filterFrequency, peakGain, type = 'bandpass') => {
+      const makeNoiseBurst = (start, duration, filterFrequency, peakGain, type = 'bandpass', q = 4.5) => {
         const bufferSize = Math.floor(ctx.sampleRate * duration);
         const buffer = ctx.createBuffer(1, bufferSize, ctx.sampleRate);
         const data = buffer.getChannelData(0);
         for (let i = 0; i < bufferSize; i++) {
           const progress = i / bufferSize;
-          const fade = Math.pow(1 - progress, 1.85);
-          const brittle = Math.sin(progress * Math.PI * 96) * 0.12;
-          data[i] = (Math.random() * 2 - 1 + brittle) * fade * 0.72;
+          const fade = Math.pow(1 - progress, 2.8);
+          const scratch = Math.sin(progress * Math.PI * 220) * 0.08;
+          const tick = (i % 31 === 0 || i % 47 === 0) ? 0.28 : 0;
+          data[i] = (Math.random() * 2 - 1 + scratch + tick) * fade * 0.62;
         }
 
         const source = ctx.createBufferSource();
@@ -61,47 +67,68 @@ function StoneBoard({ selections, onSelect, currentUser, currentUserSelection, o
         source.buffer = buffer;
         filter.type = type;
         filter.frequency.setValueAtTime(filterFrequency, ctx.currentTime + start);
-        filter.Q.value = 3.1;
+        filter.Q.value = q;
         gain.gain.setValueAtTime(0.001, ctx.currentTime + start);
-        gain.gain.exponentialRampToValueAtTime(peakGain, ctx.currentTime + start + 0.012);
+        gain.gain.exponentialRampToValueAtTime(peakGain, ctx.currentTime + start + 0.008);
         gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + start + duration);
 
         source.connect(filter);
         filter.connect(gain);
-        gain.connect(ctx.destination);
+        gain.connect(master);
         source.start(ctx.currentTime + start);
       };
 
-      const makeStoneKnock = (start, frequency, duration, peakGain, wave = 'triangle') => {
+      const makeShellSnap = (start, frequency, peakGain) => {
         const osc = ctx.createOscillator();
         const gain = ctx.createGain();
 
-        osc.type = wave;
+        osc.type = 'square';
         osc.frequency.setValueAtTime(frequency, ctx.currentTime + start);
-        osc.frequency.exponentialRampToValueAtTime(frequency * 0.45, ctx.currentTime + start + duration);
+        osc.frequency.exponentialRampToValueAtTime(frequency * 0.72, ctx.currentTime + start + 0.052);
         gain.gain.setValueAtTime(0.001, ctx.currentTime + start);
-        gain.gain.exponentialRampToValueAtTime(peakGain, ctx.currentTime + start + 0.015);
-        gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + start + duration);
+        gain.gain.exponentialRampToValueAtTime(peakGain, ctx.currentTime + start + 0.006);
+        gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + start + 0.058);
 
         osc.connect(gain);
-        gain.connect(ctx.destination);
+        gain.connect(master);
         osc.start(ctx.currentTime + start);
-        osc.stop(ctx.currentTime + start + duration);
+        osc.stop(ctx.currentTime + start + 0.064);
+        makeNoiseBurst(start + 0.008, 0.085, frequency * 2.7, peakGain * 0.8, 'highpass', 7.8);
       };
 
-      const makeHairlineSnap = (start, frequency, peakGain) => {
-        makeStoneKnock(start, frequency, 0.045, peakGain, 'square');
-        makeNoiseBurst(start + 0.006, 0.055, frequency * 4.8, peakGain * 0.58, 'highpass');
+      const makePressureCreak = () => {
+        const osc = ctx.createOscillator();
+        const filter = ctx.createBiquadFilter();
+        const gain = ctx.createGain();
+
+        osc.type = 'triangle';
+        osc.frequency.setValueAtTime(190, ctx.currentTime);
+        osc.frequency.linearRampToValueAtTime(310, ctx.currentTime + 1.15);
+        osc.frequency.linearRampToValueAtTime(160, ctx.currentTime + 2.25);
+        filter.type = 'bandpass';
+        filter.frequency.setValueAtTime(760, ctx.currentTime);
+        filter.frequency.linearRampToValueAtTime(1180, ctx.currentTime + 1.2);
+        filter.Q.value = 2.2;
+        gain.gain.setValueAtTime(0.001, ctx.currentTime);
+        gain.gain.exponentialRampToValueAtTime(0.028, ctx.currentTime + 0.2);
+        gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 2.35);
+
+        osc.connect(filter);
+        filter.connect(gain);
+        gain.connect(master);
+        osc.start(ctx.currentTime);
+        osc.stop(ctx.currentTime + 2.38);
       };
 
-      const bufferSize = Math.floor(ctx.sampleRate * 1.28);
+      const bufferSize = Math.floor(ctx.sampleRate * 2.1);
       const buffer = ctx.createBuffer(1, bufferSize, ctx.sampleRate);
       const data = buffer.getChannelData(0);
       for (let i = 0; i < bufferSize; i++) {
         const progress = i / bufferSize;
-        const fade = Math.pow(1 - progress, 2.1);
-        const granular = Math.sin(progress * Math.PI * 132) * 0.08;
-        data[i] = (Math.random() * 2 - 1 + granular) * fade * 0.34;
+        const fadeIn = Math.min(1, progress * 7);
+        const fadeOut = Math.pow(1 - progress, 2.2);
+        const granular = Math.sin(progress * Math.PI * 420) * 0.04;
+        data[i] = (Math.random() * 2 - 1 + granular) * fadeIn * fadeOut * 0.22;
       }
 
       const crumble = ctx.createBufferSource();
@@ -109,30 +136,33 @@ function StoneBoard({ selections, onSelect, currentUser, currentUserSelection, o
       const crumbleGain = ctx.createGain();
 
       crumble.buffer = buffer;
-      crumbleFilter.type = 'lowpass';
-      crumbleFilter.frequency.setValueAtTime(520, ctx.currentTime);
-      crumbleFilter.frequency.linearRampToValueAtTime(1240, ctx.currentTime + 0.95);
+      crumbleFilter.type = 'bandpass';
+      crumbleFilter.frequency.setValueAtTime(1450, ctx.currentTime + 0.18);
+      crumbleFilter.frequency.linearRampToValueAtTime(820, ctx.currentTime + 2.1);
+      crumbleFilter.Q.value = 2.4;
       crumbleGain.gain.setValueAtTime(0.001, ctx.currentTime);
-      crumbleGain.gain.exponentialRampToValueAtTime(0.105, ctx.currentTime + 0.18);
-      crumbleGain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 1.28);
+      crumbleGain.gain.exponentialRampToValueAtTime(0.07, ctx.currentTime + 0.5);
+      crumbleGain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 2.35);
 
       crumble.connect(crumbleFilter);
       crumbleFilter.connect(crumbleGain);
-      crumbleGain.connect(ctx.destination);
+      crumbleGain.connect(master);
 
-      makeStoneKnock(0.02, 112, 0.26, 0.09, 'triangle');
-      makeHairlineSnap(0.18, 1180, 0.05);
-      makeHairlineSnap(0.34, 1640, 0.055);
-      makeHairlineSnap(0.55, 1320, 0.052);
-      makeNoiseBurst(0.7, 0.18, 2400, 0.055, 'highpass');
-      makeHairlineSnap(0.92, 1840, 0.048);
-      makeHairlineSnap(1.2, 1480, 0.046);
-      makeNoiseBurst(1.34, 0.28, 1100, 0.07, 'bandpass');
-      makeStoneKnock(1.58, 92, 0.3, 0.105, 'triangle');
-      makeNoiseBurst(1.74, 0.22, 720, 0.055, 'lowpass');
-      crumble.start(ctx.currentTime + 0.42);
+      makePressureCreak();
+      makeShellSnap(0.12, 1320, 0.032);
+      makeShellSnap(0.3, 1680, 0.038);
+      makeShellSnap(0.52, 1460, 0.04);
+      makeNoiseBurst(0.74, 0.18, 2800, 0.042, 'highpass', 8.2);
+      makeShellSnap(0.92, 1960, 0.048);
+      makeShellSnap(1.16, 1560, 0.043);
+      makeNoiseBurst(1.38, 0.22, 1900, 0.05, 'bandpass', 5.6);
+      makeShellSnap(1.66, 2240, 0.05);
+      makeShellSnap(1.94, 1740, 0.044);
+      makeNoiseBurst(2.12, 0.2, 980, 0.055, 'bandpass', 3.2);
+      makeShellSnap(2.24, 1280, 0.036);
+      crumble.start(ctx.currentTime + 0.2);
 
-      window.setTimeout(() => ctx.close?.(), 2600);
+      window.setTimeout(() => ctx.close?.(), 3000);
     } catch (e) {
       console.warn('Audio API not supported or blocked', e);
     }

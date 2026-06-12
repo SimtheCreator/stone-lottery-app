@@ -2,6 +2,7 @@ import admin from 'firebase-admin';
 
 const COLLECTIONS_TO_RESET = ['selections', 'participants', 'logs'];
 const ARCHIVE_COLLECTION = 'round_archives';
+const TEST_COLLECTIONS_TO_PURGE = [...COLLECTIONS_TO_RESET, ARCHIVE_COLLECTION];
 const BATCH_SIZE = 500;
 
 let firestoreDb;
@@ -120,14 +121,16 @@ export default async function handler(req, res) {
     }
 
     const db = getDb();
-    const archiveId = await archiveCurrentRound(db);
+    const isTestPurge = body.mode === 'purge-test-data';
+    const archiveId = isTestPurge ? null : await archiveCurrentRound(db);
     const deleted = {};
+    const collectionsToDelete = isTestPurge ? TEST_COLLECTIONS_TO_PURGE : COLLECTIONS_TO_RESET;
 
-    for (const collectionName of COLLECTIONS_TO_RESET) {
+    for (const collectionName of collectionsToDelete) {
       deleted[collectionName] = await deleteCollection(db, collectionName);
     }
 
-    return res.status(200).json({ ok: true, archiveId, deleted });
+    return res.status(200).json({ ok: true, archiveId, deleted, mode: isTestPurge ? 'purge-test-data' : 'reset-round' });
   } catch (err) {
     console.error('Reset error', err);
     return res.status(500).json({ error: 'Server error' });

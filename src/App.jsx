@@ -170,6 +170,10 @@ const isPermissionError = (error) => (
   || error?.message?.toLowerCase().includes('insufficient')
 );
 
+const isLocalPreview = () => (
+  ['127.0.0.1', 'localhost', '::1'].includes(window.location.hostname)
+);
+
 const formatDateTime = (value) => {
   const millis = getTimeValue(value);
   if (!millis) return 'รอเวลาจากระบบ';
@@ -220,7 +224,7 @@ function RitualTopPanels({ currentUser, logs, claimedCount, availableCount }) {
   );
 }
 
-function AdminDashboard({ isOpen, onClose, selections, logs, archives, onReset }) {
+function AdminDashboard({ isOpen, onClose, selections, logs, archives, onReset, onPurgeTestData }) {
   const claimedEntries = useMemo(() => (
     Object.entries(selections)
       .map(([number, data]) => ({ number, ...data }))
@@ -350,10 +354,16 @@ function AdminDashboard({ isOpen, onClose, selections, logs, archives, onReset }
           <button className="btn btn-secondary" type="button" onClick={onClose}>
             กลับสู่ลานพิธี
           </button>
+          <button className="btn btn-danger btn-test-cleanup" type="button" onClick={onPurgeTestData}>
+            ล้างข้อมูลทดสอบทั้งหมด
+          </button>
           <button className="btn btn-danger" type="button" onClick={onReset}>
             ล้างกระดานสำหรับงวดถัดไป
           </button>
         </div>
+        <p className="admin-cleanup-note">
+          ปุ่มล้างข้อมูลทดสอบจะล้างทั้งกระดาน พงศาวดาร และสถิติเก่าที่ใช้ทดสอบ โดยไม่เก็บ archive เพิ่ม
+        </p>
       </section>
     </div>
   );
@@ -752,7 +762,7 @@ function App() {
         return;
       }
 
-      if (import.meta.env.DEV && response.status === 404) {
+      if (isLocalPreview() && response.status === 404) {
         console.warn('Local Vite dev server does not serve Vercel API routes; opening Admin Dashboard in local preview mode.');
         setAdminLoginError('');
         setIsAdminLoginOpen(false);
@@ -799,7 +809,7 @@ function App() {
         return;
       }
 
-      if (import.meta.env.DEV && response.status === 404) {
+      if (isLocalPreview() && response.status === 404) {
         showNotice({
           type: 'warning',
           title: 'ล้างกระดานต้องใช้ระบบ Deploy',
@@ -823,6 +833,61 @@ function App() {
       showNotice({
         type: 'error',
         title: 'ล้างกระดานไม่สำเร็จ',
+        message: 'กรุณาตรวจค่า Admin หรือ Firebase แล้วลองใหม่',
+      });
+    }
+  };
+
+  const handlePurgeTestData = async () => {
+    const confirmed = window.confirm('ยืนยันล้างข้อมูลทดสอบทั้งหมดหรือไม่? ระบบจะล้างทั้งกระดาน พงศาวดาร และสถิติเก่า โดยไม่เก็บ archive เพิ่ม');
+    if (!confirmed) return;
+
+    if (!adminPassword) {
+      setIsAdminOpen(false);
+      setIsAdminLoginOpen(true);
+      return;
+    }
+
+    try {
+      const response = await fetch('/api/reset', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ password: adminPassword, mode: 'purge-test-data' }),
+      });
+
+      if (response.status === 401) {
+        showNotice({
+          type: 'error',
+          title: 'รหัส Admin ไม่ถูกต้อง',
+          message: 'กรุณาตรวจสอบรหัสแล้วลองใหม่อีกครั้ง',
+        });
+        return;
+      }
+
+      if (isLocalPreview() && response.status === 404) {
+        showNotice({
+          type: 'warning',
+          title: 'ล้างข้อมูลทดสอบต้องใช้ระบบ Deploy',
+          message: 'หน้า local เปิด Dashboard ได้ แต่การล้างข้อมูลจริงต้องทำผ่าน Vercel ที่มี API หลังบ้าน',
+        });
+        return;
+      }
+
+      if (!response.ok) {
+        throw new Error(`Test data purge failed: ${response.status}`);
+      }
+
+      showNotice({
+        type: 'success',
+        title: 'ล้างข้อมูลทดสอบสำเร็จ',
+        message: 'ล้างกระดาน พงศาวดาร และสถิติเก่าแล้ว พร้อมเริ่มข้อมูลจริง',
+      });
+      setIsAdminOpen(false);
+    } catch (e) {
+      console.error(e);
+      showNotice({
+        type: 'error',
+        title: 'ล้างข้อมูลทดสอบไม่สำเร็จ',
         message: 'กรุณาตรวจค่า Admin หรือ Firebase แล้วลองใหม่',
       });
     }
@@ -903,6 +968,7 @@ function App() {
         logs={logs}
         archives={archives}
         onReset={handleReset}
+        onPurgeTestData={handlePurgeTestData}
       />
       <AdminLoginModal
         isOpen={isAdminLoginOpen}
