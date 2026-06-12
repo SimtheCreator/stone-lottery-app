@@ -539,6 +539,14 @@ function App() {
         return;
       }
 
+      if (import.meta.env.DEV && response.status === 404) {
+        console.warn('Local Vite dev server does not serve Vercel API routes; opening Admin Dashboard in local preview mode.');
+        setAdminLoginError('');
+        setIsAdminLoginOpen(false);
+        setIsAdminOpen(true);
+        return;
+      }
+
       if (!response.ok) {
         throw new Error(`Admin check failed: ${response.status}`);
       }
@@ -574,6 +582,15 @@ function App() {
           type: 'error',
           title: 'รหัส Admin ไม่ถูกต้อง',
           message: 'กรุณาตรวจสอบรหัสแล้วลองใหม่อีกครั้ง',
+        });
+        return;
+      }
+
+      if (import.meta.env.DEV && response.status === 404) {
+        showNotice({
+          type: 'warning',
+          title: 'ล้างกระดานต้องใช้ระบบ Deploy',
+          message: 'หน้า local เปิด Dashboard ได้ แต่การล้างกระดานต้องทำผ่าน Vercel ที่มี API หลังบ้าน',
         });
         return;
       }
