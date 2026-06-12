@@ -7,7 +7,7 @@ function ConfirmDialog({ isOpen, number, currentUser, onClose, onConfirm }) {
     <div className="modal-overlay" onClick={onClose}>
       <div className="modal-content" onClick={e => e.stopPropagation()}>
         <h2>ยืนยันการผนึกหมายเลข</h2>
-        <p>ท่านจอมเวทย์ <strong className="gold-text">{currentUser}</strong> ต้องการผนึกหมายเลขนี้ใช่หรือไม่?</p>
+        <p>ท่านจอมเวท <strong className="gold-text">{currentUser}</strong> ต้องการผนึกหมายเลขนี้ใช่หรือไม่?</p>
         
         <div className="selected-number-display">
           {number}

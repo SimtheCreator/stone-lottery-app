@@ -27,7 +27,7 @@ function NameDialog({ isOpen, number, onClose, onSubmit }) {
     <div className="modal-overlay" onClick={onClose}>
       <div className="modal-content stone-texture" onClick={e => e.stopPropagation()}>
         <h2>สลักชื่อลงบนศิลา</h2>
-        <p>กรุณากรอกชื่อของคุณเพื่อยืนยันการจองหมายเลข</p>
+        <p>กรุณากรอกชื่อของคุณเพื่อยืนยันการผนึกหมายเลข</p>
         
         <div className="selected-number-display gold-text">
           {number}
