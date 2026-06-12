@@ -49,9 +49,9 @@ function StoneBoard({ selections, onSelect, currentUser, currentUserSelection, o
         const data = buffer.getChannelData(0);
         for (let i = 0; i < bufferSize; i++) {
           const progress = i / bufferSize;
-          const fade = Math.pow(1 - progress, 1.35);
-          const brittle = Math.sin(progress * Math.PI * 34) * 0.18;
-          data[i] = (Math.random() * 2 - 1 + brittle) * fade;
+          const fade = Math.pow(1 - progress, 1.85);
+          const brittle = Math.sin(progress * Math.PI * 96) * 0.12;
+          data[i] = (Math.random() * 2 - 1 + brittle) * fade * 0.72;
         }
 
         const source = ctx.createBufferSource();
@@ -61,9 +61,9 @@ function StoneBoard({ selections, onSelect, currentUser, currentUserSelection, o
         source.buffer = buffer;
         filter.type = type;
         filter.frequency.setValueAtTime(filterFrequency, ctx.currentTime + start);
-        filter.Q.value = 2.4;
+        filter.Q.value = 3.1;
         gain.gain.setValueAtTime(0.001, ctx.currentTime + start);
-        gain.gain.exponentialRampToValueAtTime(peakGain, ctx.currentTime + start + 0.025);
+        gain.gain.exponentialRampToValueAtTime(peakGain, ctx.currentTime + start + 0.012);
         gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + start + duration);
 
         source.connect(filter);
@@ -90,18 +90,18 @@ function StoneBoard({ selections, onSelect, currentUser, currentUserSelection, o
       };
 
       const makeHairlineSnap = (start, frequency, peakGain) => {
-        makeStoneKnock(start, frequency, 0.09, peakGain, 'square');
-        makeNoiseBurst(start + 0.012, 0.08, frequency * 5.2, peakGain * 0.42, 'highpass');
+        makeStoneKnock(start, frequency, 0.045, peakGain, 'square');
+        makeNoiseBurst(start + 0.006, 0.055, frequency * 4.8, peakGain * 0.58, 'highpass');
       };
 
-      const bufferSize = Math.floor(ctx.sampleRate * 1.55);
+      const bufferSize = Math.floor(ctx.sampleRate * 1.28);
       const buffer = ctx.createBuffer(1, bufferSize, ctx.sampleRate);
       const data = buffer.getChannelData(0);
       for (let i = 0; i < bufferSize; i++) {
         const progress = i / bufferSize;
-        const fade = Math.pow(1 - progress, 1.6);
-        const granular = Math.sin(progress * Math.PI * 84) * 0.12;
-        data[i] = (Math.random() * 2 - 1 + granular) * fade * 0.54;
+        const fade = Math.pow(1 - progress, 2.1);
+        const granular = Math.sin(progress * Math.PI * 132) * 0.08;
+        data[i] = (Math.random() * 2 - 1 + granular) * fade * 0.34;
       }
 
       const crumble = ctx.createBufferSource();
@@ -110,28 +110,29 @@ function StoneBoard({ selections, onSelect, currentUser, currentUserSelection, o
 
       crumble.buffer = buffer;
       crumbleFilter.type = 'lowpass';
-      crumbleFilter.frequency.setValueAtTime(260, ctx.currentTime);
-      crumbleFilter.frequency.linearRampToValueAtTime(980, ctx.currentTime + 1.1);
+      crumbleFilter.frequency.setValueAtTime(520, ctx.currentTime);
+      crumbleFilter.frequency.linearRampToValueAtTime(1240, ctx.currentTime + 0.95);
       crumbleGain.gain.setValueAtTime(0.001, ctx.currentTime);
-      crumbleGain.gain.exponentialRampToValueAtTime(0.2, ctx.currentTime + 0.14);
-      crumbleGain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 1.55);
+      crumbleGain.gain.exponentialRampToValueAtTime(0.105, ctx.currentTime + 0.18);
+      crumbleGain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 1.28);
 
       crumble.connect(crumbleFilter);
       crumbleFilter.connect(crumbleGain);
       crumbleGain.connect(ctx.destination);
 
-      makeStoneKnock(0, 72, 0.42, 0.34);
-      makeHairlineSnap(0.28, 420, 0.08);
-      makeHairlineSnap(0.52, 620, 0.075);
-      makeHairlineSnap(0.78, 540, 0.07);
-      makeNoiseBurst(0.92, 0.22, 1250, 0.12, 'bandpass');
-      makeHairlineSnap(1.14, 760, 0.06);
-      makeStoneKnock(1.38, 105, 0.34, 0.16);
-      makeNoiseBurst(1.52, 0.32, 580, 0.13, 'lowpass');
-      makeNoiseBurst(1.9, 0.24, 1900, 0.06, 'highpass');
-      crumble.start(ctx.currentTime + 0.16);
+      makeStoneKnock(0.02, 112, 0.26, 0.09, 'triangle');
+      makeHairlineSnap(0.18, 1180, 0.05);
+      makeHairlineSnap(0.34, 1640, 0.055);
+      makeHairlineSnap(0.55, 1320, 0.052);
+      makeNoiseBurst(0.7, 0.18, 2400, 0.055, 'highpass');
+      makeHairlineSnap(0.92, 1840, 0.048);
+      makeHairlineSnap(1.2, 1480, 0.046);
+      makeNoiseBurst(1.34, 0.28, 1100, 0.07, 'bandpass');
+      makeStoneKnock(1.58, 92, 0.3, 0.105, 'triangle');
+      makeNoiseBurst(1.74, 0.22, 720, 0.055, 'lowpass');
+      crumble.start(ctx.currentTime + 0.42);
 
-      window.setTimeout(() => ctx.close?.(), 2700);
+      window.setTimeout(() => ctx.close?.(), 2600);
     } catch (e) {
       console.warn('Audio API not supported or blocked', e);
     }

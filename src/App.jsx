@@ -23,6 +23,147 @@ const formatRitualText = (text = '') => (
     .replace(/รหัส\s+(.+?)\s+ได้จองหมายเลข\s+(\d{1,2})\s+แล้ว/g, 'จอมเวท $1 ได้ผนึกหมายเลข $2 แล้ว')
 );
 
+const toStoneNumber = (value) => {
+  const numeric = Number.parseInt(String(value ?? '').replace(/\D/g, ''), 10);
+  if (Number.isNaN(numeric)) return null;
+  return Math.max(0, Math.min(99, numeric));
+};
+
+const describePersona = ({ picks, repeatCount, oddRatio, highRatio, spread }) => {
+  if (picks >= 2 && repeatCount > 0) {
+    return {
+      title: 'นักย้ำชะตา',
+      note: 'มีเลขประจำใจ เชื่อแล้วไม่ค่อยเปลี่ยนทิศ',
+    };
+  }
+
+  if (picks >= 3 && spread >= 55) {
+    return {
+      title: 'นักสำรวจวงเวท',
+      note: 'ลองหลายช่วงเลข เปิดรับสัญญาณใหม่มากกว่ายึดตำราเดิม',
+    };
+  }
+
+  if (oddRatio >= 0.68) {
+    return {
+      title: 'จอมเวทญาณไว',
+      note: 'ชอบเลขคี่ จังหวะตัดสินใจมักมาจากความรู้สึกแรก',
+    };
+  }
+
+  if (oddRatio <= 0.32) {
+    return {
+      title: 'ผู้คุมสมดุล',
+      note: 'เอนเอียงเลขคู่ ชอบความนิ่งและสัญญาณที่ดูเป็นระบบ',
+    };
+  }
+
+  if (highRatio >= 0.68) {
+    return {
+      title: 'นักล่าปลายกระดาน',
+      note: 'ชอบเลขสูง มีแนวโน้มเลือกพลังที่ดูเด่นและชัด',
+    };
+  }
+
+  if (highRatio <= 0.32) {
+    return {
+      title: 'ผู้รักษาฐานพลัง',
+      note: 'ชอบเลขต้นกระดาน เลือกแบบตั้งหลักก่อนเร่งจังหวะ',
+    };
+  }
+
+  return {
+    title: 'จอมเวทสมดุล',
+    note: 'เลือกคละช่วง อ่านสัญญาณจากทั้งเหตุผลและความรู้สึก',
+  };
+};
+
+const buildSeasonProfiles = (selections, archives) => {
+  const rows = [];
+
+  Object.entries(selections).forEach(([number, data]) => {
+    rows.push({
+      name: data?.name || 'ไม่ระบุนาม',
+      number: data?.number || number,
+      timestamp: data?.timestamp || null,
+      source: 'current',
+    });
+  });
+
+  archives.forEach((archive) => {
+    (archive.participants || []).forEach((participant) => {
+      rows.push({
+        name: participant.name || 'ไม่ระบุนาม',
+        number: participant.number,
+        timestamp: participant.timestamp || archive.createdAt || null,
+        source: archive.id,
+      });
+    });
+  });
+
+  const grouped = new Map();
+  rows.forEach((row) => {
+    const normalizedName = String(row.name || '').trim();
+    if (!normalizedName) return;
+
+    const key = getParticipantId(normalizedName);
+    const numeric = toStoneNumber(row.number);
+    if (numeric === null) return;
+
+    if (!grouped.has(key)) {
+      grouped.set(key, {
+        id: key,
+        name: normalizedName,
+        numbers: [],
+        lastTimestamp: 0,
+      });
+    }
+
+    const profile = grouped.get(key);
+    profile.numbers.push(numeric);
+    profile.lastTimestamp = Math.max(profile.lastTimestamp, getTimeValue(row.timestamp));
+  });
+
+  return Array.from(grouped.values())
+    .map((profile) => {
+      const picks = profile.numbers.length;
+      const sorted = [...profile.numbers].sort((a, b) => a - b);
+      const uniqueCount = new Set(profile.numbers).size;
+      const repeatCount = picks - uniqueCount;
+      const oddCount = profile.numbers.filter((number) => number % 2 === 1).length;
+      const highCount = profile.numbers.filter((number) => number >= 50).length;
+      const spread = sorted[sorted.length - 1] - sorted[0];
+      const digitCounts = profile.numbers.reduce((acc, number) => {
+        const digit = number % 10;
+        acc[digit] = (acc[digit] || 0) + 1;
+        return acc;
+      }, {});
+      const favoriteDigit = Object.entries(digitCounts)
+        .sort((a, b) => b[1] - a[1] || Number(a[0]) - Number(b[0]))[0]?.[0] ?? '-';
+      const persona = describePersona({
+        picks,
+        repeatCount,
+        oddRatio: oddCount / picks,
+        highRatio: highCount / picks,
+        spread,
+      });
+
+      return {
+        ...profile,
+        picks,
+        repeatCount,
+        favoriteDigit,
+        persona,
+        rangeLabel: `${String(sorted[0]).padStart(2, '0')}-${String(sorted[sorted.length - 1]).padStart(2, '0')}`,
+        numbersLabel: profile.numbers
+          .slice(-5)
+          .map((number) => String(number).padStart(2, '0'))
+          .join(', '),
+      };
+    })
+    .sort((a, b) => b.picks - a.picks || b.lastTimestamp - a.lastTimestamp || a.name.localeCompare(b.name));
+};
+
 const isPermissionError = (error) => (
   error?.code === 'permission-denied'
   || error?.message?.toLowerCase().includes('permission')
@@ -40,6 +181,8 @@ const formatDateTime = (value) => {
 };
 
 function RitualTopPanels({ currentUser, logs, claimedCount, availableCount }) {
+  const visibleLogs = logs.slice(-5).reverse();
+
   return (
     <section className="top-ritual-grid" aria-label="กติกาและพงศาวดาร">
       <div className="sidebar-panel ritual-rules-panel">
@@ -63,7 +206,7 @@ function RitualTopPanels({ currentUser, logs, claimedCount, availableCount }) {
           <span className="mini-stat">{claimedCount} จารึกแล้ว · ว่าง {availableCount}</span>
         </div>
         <div className="log-container top-log-container" id="log-list">
-          {logs.map((log) => (
+          {visibleLogs.map((log) => (
             <div
               key={log.id}
               className={`log-item ${log.type === 'claimed' ? 'claimed-log' : ''}`}
@@ -87,6 +230,9 @@ function AdminDashboard({ isOpen, onClose, selections, logs, archives, onReset }
   const claimedCount = claimedEntries.length;
   const availableCount = 100 - claimedCount;
   const latestClaim = claimedEntries[0];
+  const seasonProfiles = useMemo(() => (
+    buildSeasonProfiles(selections, archives)
+  ), [selections, archives]);
 
   if (!isOpen) return null;
 
@@ -169,6 +315,35 @@ function AdminDashboard({ isOpen, onClose, selections, logs, archives, onReset }
               <div className="empty-state">ยังไม่มีประวัติงวดก่อน กดล้างกระดานครั้งแรกจึงเริ่มเก็บ archive</div>
             )}
           </div>
+        </div>
+
+        <div className="admin-section oracle-section">
+          <div className="admin-section-title">Oracle AI อ่านลายเส้นตัวเลข</div>
+          <p className="oracle-note">
+            อ่านจากหมายเลขที่แต่ละจอมเวทเลือกในทุกงวดที่ถูก archive ไว้ รวมกับกระดานปัจจุบัน เพื่อใช้สรุปนิสัยตอนจบซีซั่น
+          </p>
+          {seasonProfiles.length ? (
+            <div className="oracle-profile-grid">
+              {seasonProfiles.slice(0, 8).map((profile) => (
+                <div className="oracle-card" key={profile.id}>
+                  <div className="oracle-card-head">
+                    <strong>{profile.name}</strong>
+                    <span>{profile.picks} ครั้ง</span>
+                  </div>
+                  <div className="oracle-persona">{profile.persona.title}</div>
+                  <p>{profile.persona.note}</p>
+                  <div className="oracle-metrics">
+                    <span>ช่วง {profile.rangeLabel}</span>
+                    <span>ท้ายโปรด {profile.favoriteDigit}</span>
+                    <span>{profile.repeatCount ? `ซ้ำ ${profile.repeatCount}` : 'ไม่ซ้ำ'}</span>
+                  </div>
+                  <small>เลขล่าสุด: {profile.numbersLabel}</small>
+                </div>
+              ))}
+            </div>
+          ) : (
+            <div className="empty-state">ยังไม่มีข้อมูลพอให้อ่าน pattern ต้องมีอย่างน้อย 1 การจารึกก่อน</div>
+          )}
         </div>
 
         <div className="admin-actions">
@@ -289,30 +464,67 @@ function App() {
   useEffect(() => {
     const canvas = canvasRef.current;
     if (!canvas) return;
-    const ctx = canvas.getContext('2d');
+    const motionQuery = window.matchMedia('(prefers-reduced-motion: reduce)');
+    if (motionQuery.matches) return;
+
+    const ctx = canvas.getContext('2d', { alpha: true });
     const stars = [];
-    const count = 100;
+    const isCompact = window.innerWidth < 700;
+    const count = isCompact ? 34 : 58;
+    const maxFps = isCompact ? 18 : 24;
+    const frameInterval = 1000 / maxFps;
+    const pixelRatio = Math.min(window.devicePixelRatio || 1, 1.25);
+    let width = 0;
+    let height = 0;
+    let animationFrameId;
+    let lastFrame = 0;
+    let resizeTimeout;
 
     const resize = () => {
-      canvas.width = window.innerWidth;
-      canvas.height = window.innerHeight;
+      width = window.innerWidth;
+      height = window.innerHeight;
+      canvas.width = Math.floor(width * pixelRatio);
+      canvas.height = Math.floor(height * pixelRatio);
+      canvas.style.width = `${width}px`;
+      canvas.style.height = `${height}px`;
+      ctx.setTransform(pixelRatio, 0, 0, pixelRatio, 0, 0);
+
+      stars.forEach((star) => {
+        star.x = Math.min(star.x, width);
+        star.y = Math.min(star.y, height);
+      });
     };
-    window.addEventListener('resize', resize);
+
+    const scheduleResize = () => {
+      window.clearTimeout(resizeTimeout);
+      resizeTimeout = window.setTimeout(resize, 120);
+    };
+    window.addEventListener('resize', scheduleResize, { passive: true });
     resize();
 
     for (let i = 0; i < count; i++) {
       stars.push({
-        x: Math.random() * canvas.width,
-        y: Math.random() * canvas.height,
-        size: Math.random() * 1.5 + 0.5,
-        alpha: Math.random(),
-        speed: Math.random() * 0.02 + 0.005,
+        x: Math.random() * width,
+        y: Math.random() * height,
+        size: Math.random() * 1.25 + 0.45,
+        alpha: Math.random() * 0.72 + 0.18,
+        speed: Math.random() * 0.012 + 0.003,
       });
     }
 
-    let animationFrameId;
-    const draw = () => {
-      ctx.clearRect(0, 0, canvas.width, canvas.height);
+    const draw = (timestamp = 0) => {
+      if (document.hidden) {
+        animationFrameId = requestAnimationFrame(draw);
+        return;
+      }
+
+      if (timestamp - lastFrame < frameInterval) {
+        animationFrameId = requestAnimationFrame(draw);
+        return;
+      }
+
+      lastFrame = timestamp;
+      ctx.clearRect(0, 0, width, height);
       stars.forEach((star) => {
         star.alpha += star.speed;
         if (star.alpha > 1 || star.alpha < 0) star.speed = -star.speed;
@@ -326,7 +538,8 @@ function App() {
     draw();
 
     return () => {
-      window.removeEventListener('resize', resize);
+      window.removeEventListener('resize', scheduleResize);
+      window.clearTimeout(resizeTimeout);
       cancelAnimationFrame(animationFrameId);
     };
   }, []);
