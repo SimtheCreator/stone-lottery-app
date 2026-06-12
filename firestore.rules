@@ -1,0 +1,93 @@
+rules_version = '2';
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+    function isTwoDigitNumber(number) {
+      return number is string && number.matches('^[0-9]{2}$');
+    }
+
+    function isValidName(name) {
+      return name is string && name.size() > 0 && name.size() <= 30;
+    }
+
+    function isValidParticipantId(participantId) {
+      return participantId is string
+        && participantId.size() > 0
+        && participantId.size() <= 400
+        && participantId.matches('^[A-Za-z0-9%._~-]+$');
+    }
+
+    function hasValidSelectionShape(data) {
+      return data.keys().hasOnly(['name', 'number', 'participantId', 'timestamp'])
+        && isValidName(data.name)
+        && isTwoDigitNumber(data.number)
+        && isValidParticipantId(data.participantId)
+        && data.timestamp == request.time;
+    }
+
+    function participantPath(participantId) {
+      return /databases/$(database)/documents/participants/$(participantId);
+    }
+
+    function selectionPath(number) {
+      return /databases/$(database)/documents/selections/$(number);
+    }
+
+    function pairedParticipantWillExist(data) {
+      return getAfter(participantPath(data.participantId)).data.name == data.name
+        && getAfter(participantPath(data.participantId)).data.number == data.number
+        && getAfter(participantPath(data.participantId)).data.participantId == data.participantId
+        && getAfter(participantPath(data.participantId)).data.timestamp == request.time;
+    }
+
+    function pairedSelectionWillExist(data) {
+      return getAfter(selectionPath(data.number)).data.name == data.name
+        && getAfter(selectionPath(data.number)).data.number == data.number
+        && getAfter(selectionPath(data.number)).data.participantId == data.participantId
+        && getAfter(selectionPath(data.number)).data.timestamp == request.time;
+    }
+
+    match /selections/{number} {
+      allow read: if true;
+      allow create: if number == request.resource.data.number
+        && hasValidSelectionShape(request.resource.data)
+        && !exists(selectionPath(number))
+        && !exists(participantPath(request.resource.data.participantId))
+        && pairedParticipantWillExist(request.resource.data);
+      allow update, delete: if false;
+    }
+
+    match /participants/{participantId} {
+      allow get: if true;
+      allow list: if false;
+      allow create: if participantId == request.resource.data.participantId
+        && hasValidSelectionShape(request.resource.data)
+        && !exists(participantPath(participantId))
+        && !exists(selectionPath(request.resource.data.number))
+        && pairedSelectionWillExist(request.resource.data);
+      allow update, delete: if false;
+    }
+
+    match /logs/{logId} {
+      allow read: if true;
+      allow create: if request.resource.data.keys().hasOnly(['text', 'type', 'timestamp'])
+        && request.resource.data.text is string
+        && request.resource.data.text.size() > 0
+        && request.resource.data.text.size() <= 200
+        && (request.resource.data.type == 'info'
+          || request.resource.data.type == 'claimed'
+          || request.resource.data.type == 'error')
+        && request.resource.data.timestamp == request.time;
+      allow update, delete: if false;
+    }
+
+    match /round_archives/{archiveId} {
+      allow read: if true;
+      allow write: if false;
+    }
+
+    match /{document=**} {
+      allow read, write: if false;
+    }
+  }
+}
