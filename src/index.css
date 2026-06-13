@@ -2545,58 +2545,7 @@ body::after {
     }
 }
 
-/* MKTXCRC engagement polish: one-shot ritual sweep, energy status, quick empty-number choices */
-.board-energy-band {
-    margin: 0 0 12px;
-    padding: 12px 14px;
-    border: 1px solid rgba(255, 212, 117, 0.22);
-    border-radius: 14px;
-    background:
-        linear-gradient(135deg, rgba(255, 212, 117, 0.08), rgba(87, 38, 142, 0.16)),
-        rgba(18, 8, 43, 0.22);
-    box-shadow:
-        inset 0 1px 0 rgba(255, 255, 255, 0.06),
-        0 8px 18px rgba(17, 8, 40, 0.18);
-}
-
-.energy-band-copy {
-    display: flex;
-    justify-content: space-between;
-    gap: 12px;
-    color: #fff2c8;
-    font-size: 0.9rem;
-    font-weight: 800;
-}
-
-.energy-band-copy strong {
-    color: var(--gold-primary);
-    font-family: var(--font-mystic);
-}
-
-.energy-track {
-    height: 9px;
-    margin: 9px 0 7px;
-    overflow: hidden;
-    border-radius: 999px;
-    background: rgba(12, 6, 30, 0.72);
-    box-shadow: inset 0 1px 4px rgba(0, 0, 0, 0.5);
-}
-
-.energy-track span {
-    display: block;
-    height: 100%;
-    border-radius: inherit;
-    background:
-        linear-gradient(90deg, #8c4dff, #ffcf72 72%, #fff3c4);
-    box-shadow: 0 0 14px rgba(255, 212, 117, 0.38);
-    transition: width 0.45s ease;
-}
-
-.board-energy-band small {
-    color: #cfc5ea;
-    display: block;
-    font-size: 0.78rem;
-}
+/* MKTXCRC engagement polish: one-shot ritual sweep and quick empty-number choices */
 
 .ritual-stage-line {
     display: flex;
@@ -2700,8 +2649,7 @@ body::after {
 }
 
 @media (max-width: 700px) {
-    .empty-number-strip,
-    .board-energy-band {
+    .empty-number-strip {
         padding: 10px;
     }
 
@@ -2721,7 +2669,6 @@ body::after {
         animation: none;
     }
 
-    .energy-track span,
     .empty-number-strip button,
     .tablet-tile {
         transition: none;

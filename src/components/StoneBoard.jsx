@@ -13,18 +13,8 @@ function StoneBoard({ selections, onSelect, currentUser, currentUserSelection, o
   const [inscribingNum, setInscribingNum] = useState(null);
 
   const currentUsers = Object.keys(selections).length;
-  const claimedPercent = Math.round((currentUsers / NUMBERS.length) * 100);
   const availableNumbers = useMemo(() => (
     NUMBERS.filter((num) => !selections[num]).slice(0, 8)
-  ), [selections]);
-  const latestSelection = useMemo(() => (
-    Object.entries(selections)
-      .map(([number, data]) => ({ number, ...data }))
-      .sort((a, b) => {
-        const left = typeof a.timestamp?.toMillis === 'function' ? a.timestamp.toMillis() : 0;
-        const right = typeof b.timestamp?.toMillis === 'function' ? b.timestamp.toMillis() : 0;
-        return right - left;
-      })[0]
   ), [selections]);
   const ritualStageLabel = useMemo(() => {
     if (shatteringNum && claimingNum) return 'ศิลากำลัง crack เพื่อเปิดผนึก';
@@ -225,21 +215,6 @@ function StoneBoard({ selections, onSelect, currentUser, currentUserSelection, o
           <span id="stat-available">ว่าง: {100 - currentUsers}/100</span>
           <span id="stat-claimed">จารึกสำเร็จ: {currentUsers}</span>
         </div>
-      </div>
-
-      <div className="board-energy-band" aria-label={`พลังผนึก ${claimedPercent} เปอร์เซ็นต์`}>
-        <div className="energy-band-copy">
-          <span>พลังผนึกกระดาน</span>
-          <strong>{claimedPercent}%</strong>
-        </div>
-        <div className="energy-track">
-          <span style={{ width: `${claimedPercent}%` }}></span>
-        </div>
-        <small>
-          {latestSelection
-            ? `ผู้ปลุกศิลาล่าสุด: จอมเวท ${latestSelection.name} · หมายเลข ${latestSelection.number}`
-            : 'ยังไม่มีผู้ปลุกศิลาในรอบนี้'}
-        </small>
       </div>
 
       <div className={`board-warning-ribbon ${currentUserSelection ? 'locked' : ''}`} role="status" aria-live="polite">
