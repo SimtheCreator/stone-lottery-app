@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useState } from 'react';
 import ConfirmDialog from './ConfirmDialog';
 
 const NUMBERS = Array.from({ length: 100 }, (_, i) => i.toString().padStart(2, '0'));
@@ -13,17 +13,6 @@ function StoneBoard({ selections, onSelect, currentUser, currentUserSelection, o
   const [inscribingNum, setInscribingNum] = useState(null);
 
   const currentUsers = Object.keys(selections).length;
-  const availableNumbers = useMemo(() => (
-    NUMBERS.filter((num) => !selections[num]).slice(0, 8)
-  ), [selections]);
-  const ritualStageLabel = useMemo(() => {
-    if (shatteringNum && claimingNum) return 'ศิลากำลัง crack เพื่อเปิดผนึก';
-    if (claimingNum) return 'วงเวทกำลังตรวจสิทธิ์';
-    if (shatteringNum) return 'ศิลากำลัง crack';
-    if (inscribingNum) return 'ศิลายอมรับจารึกแล้ว';
-    if (currentUserSelection) return 'ผนึกของท่านเสถียรแล้ว';
-    return 'เลือกศิลาที่ยังว่างเพื่อเริ่มพิธี';
-  }, [claimingNum, currentUserSelection, inscribingNum, shatteringNum]);
 
   const handleNumberClick = (num) => {
     if (shatteringNum || claimingNum) return;
@@ -224,27 +213,6 @@ function StoneBoard({ selections, onSelect, currentUser, currentUserSelection, o
             ? `จอมเวท ${currentUser} ผนึกหมายเลข ${currentUserSelection.number} แล้ว ห้ามจารึกซ้ำในรอบนี้`
             : 'จอมเวท 1 ท่าน จารึกได้เพียง 1 หมายเลขเท่านั้น'}
         </strong>
-      </div>
-
-      <div className={`ritual-stage-line ${claimingNum || shatteringNum || inscribingNum ? 'active' : ''}`} aria-live="polite">
-        <span className="stage-sigil" aria-hidden="true"></span>
-        <span>{ritualStageLabel}</span>
-      </div>
-
-      <div className="empty-number-strip" aria-label="เลขไร้ผู้ครอบครอง">
-        <span>เลขไร้ผู้ครอบครอง</span>
-        <div>
-          {availableNumbers.map((num) => (
-            <button
-              type="button"
-              key={num}
-              onClick={() => handleNumberClick(num)}
-              disabled={!!shatteringNum || !!claimingNum || !!currentUserSelection}
-            >
-              {num}
-            </button>
-          ))}
-        </div>
       </div>
 
       <div id="theme-tablet" className="tablet-grid">
