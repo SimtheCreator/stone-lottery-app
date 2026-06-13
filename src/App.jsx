@@ -901,7 +901,7 @@ function App() {
 
       <header>
         <h1>🔮 มนตราเสี่ยงทาย 🔮</h1>
-        <p>กิจกรรมทำนายตัวเลข 2 หลักเพื่อสะสมพลังโชคชะตาแห่ง MKT สายมู</p>
+        <p>กิจกรรมทำนายตัวเลข 2 หลักเพื่อสะสมพลังโชคชะตาแห่ง MKTXCRC สายมู</p>
       </header>
 
       <main className={!isJoined ? 'container join-container' : 'ritual-shell'}>

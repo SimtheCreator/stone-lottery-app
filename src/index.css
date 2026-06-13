@@ -2544,3 +2544,186 @@ body::after {
         grid-template-columns: 1fr;
     }
 }
+
+/* MKTXCRC engagement polish: one-shot ritual sweep, energy status, quick empty-number choices */
+.board-energy-band {
+    margin: 0 0 12px;
+    padding: 12px 14px;
+    border: 1px solid rgba(255, 212, 117, 0.22);
+    border-radius: 14px;
+    background:
+        linear-gradient(135deg, rgba(255, 212, 117, 0.08), rgba(87, 38, 142, 0.16)),
+        rgba(18, 8, 43, 0.22);
+    box-shadow:
+        inset 0 1px 0 rgba(255, 255, 255, 0.06),
+        0 8px 18px rgba(17, 8, 40, 0.18);
+}
+
+.energy-band-copy {
+    display: flex;
+    justify-content: space-between;
+    gap: 12px;
+    color: #fff2c8;
+    font-size: 0.9rem;
+    font-weight: 800;
+}
+
+.energy-band-copy strong {
+    color: var(--gold-primary);
+    font-family: var(--font-mystic);
+}
+
+.energy-track {
+    height: 9px;
+    margin: 9px 0 7px;
+    overflow: hidden;
+    border-radius: 999px;
+    background: rgba(12, 6, 30, 0.72);
+    box-shadow: inset 0 1px 4px rgba(0, 0, 0, 0.5);
+}
+
+.energy-track span {
+    display: block;
+    height: 100%;
+    border-radius: inherit;
+    background:
+        linear-gradient(90deg, #8c4dff, #ffcf72 72%, #fff3c4);
+    box-shadow: 0 0 14px rgba(255, 212, 117, 0.38);
+    transition: width 0.45s ease;
+}
+
+.board-energy-band small {
+    color: #cfc5ea;
+    display: block;
+    font-size: 0.78rem;
+}
+
+.ritual-stage-line {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    margin: -2px 0 12px;
+    color: #d9d2ee;
+    font-size: 0.88rem;
+    min-height: 22px;
+}
+
+.stage-sigil {
+    width: 11px;
+    height: 11px;
+    border: 1px solid rgba(255, 212, 117, 0.8);
+    transform: rotate(45deg);
+    background: rgba(255, 212, 117, 0.18);
+    box-shadow: 0 0 10px rgba(255, 212, 117, 0.22);
+}
+
+.ritual-stage-line.active .stage-sigil {
+    animation: sigilBreathe 0.9s ease-in-out infinite alternate;
+}
+
+.empty-number-strip {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    margin: 0 0 14px;
+    padding: 10px 12px;
+    border: 1px solid rgba(153, 236, 255, 0.14);
+    border-radius: 12px;
+    background: rgba(18, 8, 43, 0.2);
+}
+
+.empty-number-strip > span {
+    color: #c9c0e7;
+    font-size: 0.82rem;
+    font-weight: 800;
+    white-space: nowrap;
+}
+
+.empty-number-strip > div {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: flex-end;
+    gap: 7px;
+}
+
+.empty-number-strip button {
+    min-width: 38px;
+    height: 30px;
+    border: 1px solid rgba(255, 212, 117, 0.28);
+    border-radius: 8px;
+    background:
+        linear-gradient(145deg, rgba(255, 212, 117, 0.12), rgba(93, 48, 142, 0.28));
+    color: #fff2c8;
+    cursor: pointer;
+    font-family: var(--font-mystic);
+    font-weight: 900;
+    transition: transform 0.16s ease, border-color 0.16s ease, box-shadow 0.16s ease;
+}
+
+.empty-number-strip button:hover:not(:disabled) {
+    transform: translateY(-2px);
+    border-color: rgba(255, 212, 117, 0.72);
+    box-shadow: 0 0 14px rgba(255, 212, 117, 0.22);
+}
+
+.empty-number-strip button:disabled {
+    cursor: default;
+    opacity: 0.48;
+}
+
+.tablet-grid {
+    position: relative;
+}
+
+.tablet-grid::before {
+    content: '';
+    position: absolute;
+    z-index: 12;
+    inset: 4px;
+    pointer-events: none;
+    background:
+        linear-gradient(115deg, transparent 0 38%, rgba(255, 239, 190, 0.18) 47%, rgba(153, 236, 255, 0.12) 52%, transparent 62% 100%);
+    transform: translateX(-120%);
+    animation: boardOpeningSweep 1.7s ease-out 0.18s both;
+}
+
+@keyframes boardOpeningSweep {
+    0% { opacity: 0; transform: translateX(-120%); }
+    18% { opacity: 0.78; }
+    100% { opacity: 0; transform: translateX(120%); }
+}
+
+@keyframes sigilBreathe {
+    from { opacity: 0.58; transform: rotate(45deg) scale(0.92); }
+    to { opacity: 1; transform: rotate(45deg) scale(1.12); }
+}
+
+@media (max-width: 700px) {
+    .empty-number-strip,
+    .board-energy-band {
+        padding: 10px;
+    }
+
+    .empty-number-strip {
+        align-items: flex-start;
+        flex-direction: column;
+    }
+
+    .empty-number-strip > div {
+        justify-content: flex-start;
+    }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .tablet-grid::before,
+    .ritual-stage-line.active .stage-sigil {
+        animation: none;
+    }
+
+    .energy-track span,
+    .empty-number-strip button,
+    .tablet-tile {
+        transition: none;
+    }
+}

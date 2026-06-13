@@ -30,8 +30,8 @@
 
 ## สถานะ Git และ Deploy
 
-- Commit ล่าสุดที่ต้องตรวจว่าถูก push แล้ว: `f578113 Add test data purge and slow crack audio`
-- ถ้า GitHub ยังอยู่ที่ commit เก่ากว่า แปลว่ายังต้อง push ใหม่ด้วย GitHub token
+- ก่อน deploy ทุกครั้งให้เช็ก `git log -1 --oneline` เพื่อรู้ commit ล่าสุดจริง
+- ถ้า GitHub/Vercel ยังอยู่ commit เก่ากว่า local `HEAD` แปลว่ายังต้อง push ใหม่ด้วย GitHub token
 - Vercel จะ deploy อัตโนมัติเมื่อ GitHub `main` ได้รับ commit ล่าสุด
 - ก่อนบอกว่า production พร้อม ต้องตรวจ Vercel Deployments ว่า build จาก commit ล่าสุดสำเร็จแล้ว
 
