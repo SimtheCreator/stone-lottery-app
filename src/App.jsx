@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { addDoc, doc, onSnapshot, runTransaction, serverTimestamp } from 'firebase/firestore';
 import { archivesCol, db, logsCol, selectionsCol } from './firebase';
 import StoneBoard from './components/StoneBoard';
+import { EXPECTED_PARTICIPANTS, EXPECTED_PARTICIPANT_SET, normalizeParticipantCode } from './participantRoster';
 
 const INITIAL_LOGS = [
   { id: 0, text: '🔮 แท่นพิธีเริ่มต้นขึ้นแล้ว เลือกเลขนำโชคของคุณได้เลย...', type: 'info' },
@@ -176,7 +177,7 @@ const isLocalPreview = () => (
 
 const getSavedParticipant = () => {
   try {
-    return localStorage.getItem('lottery_currentUser') || '';
+    return normalizeParticipantCode(localStorage.getItem('lottery_currentUser'));
   } catch {
     return '';
   }
@@ -426,16 +427,71 @@ function GateAdminPanel({ gateSettings, gateView, onGateUpdate }) {
   );
 }
 
-function AdminDashboard({ isOpen, onClose, selections, logs, archives, gateSettings, gateView, onGateUpdate, onReset, onPurgeTestData }) {
+function AdminDashboard({ isOpen, onClose, selections, logs, archives, checkins, gateSettings, gateView, onGateUpdate, onReset, onPurgeTestData }) {
+  const [rosterFilter, setRosterFilter] = useState('');
   const claimedEntries = useMemo(() => (
     Object.entries(selections)
       .map(([number, data]) => ({ number, ...data }))
       .sort((a, b) => getTimeValue(b.timestamp) - getTimeValue(a.timestamp))
   ), [selections]);
+  const checkedInEntries = useMemo(() => (
+    (checkins || [])
+      .map((entry) => ({
+        ...entry,
+        name: normalizeParticipantCode(entry.name || entry.code || entry.id),
+      }))
+      .filter((entry) => entry.name)
+  ), [checkins]);
 
   const claimedCount = claimedEntries.length;
   const availableCount = 100 - claimedCount;
   const latestClaim = claimedEntries[0];
+  const rosterFilterValue = normalizeParticipantCode(rosterFilter);
+  const claimedMap = useMemo(() => {
+    const map = new Map();
+    claimedEntries.forEach((entry) => {
+      map.set(normalizeParticipantCode(entry.name), entry);
+    });
+    return map;
+  }, [claimedEntries]);
+  const checkedInMap = useMemo(() => {
+    const map = new Map();
+    checkedInEntries.forEach((entry) => {
+      map.set(normalizeParticipantCode(entry.name), entry);
+    });
+    return map;
+  }, [checkedInEntries]);
+  const rosterEntries = useMemo(() => (
+    EXPECTED_PARTICIPANTS.map((code) => {
+      const checkin = checkedInMap.get(code);
+      const claim = claimedMap.get(code);
+      return {
+        code,
+        checkedIn: Boolean(checkin || claim),
+        claimed: Boolean(claim),
+        number: claim?.number || '',
+        timestamp: checkin?.timestamp || checkin?.updatedAt || claim?.timestamp || null,
+      };
+    })
+  ), [checkedInMap, claimedMap]);
+  const missingRoster = rosterEntries.filter((entry) => !entry.checkedIn);
+  const enteredRoster = rosterEntries.filter((entry) => entry.checkedIn);
+  const waitingRoster = rosterEntries.filter((entry) => entry.checkedIn && !entry.claimed);
+  const unknownRoster = [
+    ...checkedInEntries
+      .filter((entry) => !EXPECTED_PARTICIPANT_SET.has(normalizeParticipantCode(entry.name)))
+      .map((entry) => ({ code: normalizeParticipantCode(entry.name), status: 'เข้าพิธีแล้ว' })),
+    ...claimedEntries
+      .filter((entry) => !EXPECTED_PARTICIPANT_SET.has(normalizeParticipantCode(entry.name)))
+      .map((entry) => ({ code: normalizeParticipantCode(entry.name), status: `ผนึกหมายเลข ${entry.number}` })),
+  ].filter((entry, index, all) => (
+    entry.code && all.findIndex((candidate) => candidate.code === entry.code) === index
+  ));
+  const matchesRosterFilter = (entry) => (
+    !rosterFilterValue || entry.code.includes(rosterFilterValue)
+  );
+  const visibleMissingRoster = missingRoster.filter(matchesRosterFilter);
+  const visibleEnteredRoster = enteredRoster.filter(matchesRosterFilter);
   const seasonProfiles = useMemo(() => (
     buildSeasonProfiles(selections, archives)
   ), [selections, archives]);
@@ -490,6 +546,81 @@ function AdminDashboard({ isOpen, onClose, selections, logs, archives, gateSetti
           gateView={gateView}
           onGateUpdate={onGateUpdate}
         />
+
+        <div className="admin-section roster-section">
+          <div className="roster-header">
+            <div>
+              <div className="admin-section-title">บัญชีจอมเวท MKTXCRC</div>
+              <p>เช็กจากรายชื่อพนักงานที่ต้องเข้าพิธีทั้งหมด {EXPECTED_PARTICIPANTS.length} คน</p>
+            </div>
+            <input
+              type="search"
+              className="roster-search"
+              value={rosterFilter}
+              onChange={(event) => setRosterFilter(event.target.value)}
+              placeholder="ค้นจอมเวท..."
+              aria-label="ค้นจอมเวทในบัญชี"
+            />
+          </div>
+
+          <div className="roster-summary-grid">
+            <div className="roster-summary-card">
+              <span>ทั้งหมด</span>
+              <strong>{EXPECTED_PARTICIPANTS.length}</strong>
+            </div>
+            <div className="roster-summary-card ready">
+              <span>เข้าพิธีแล้ว</span>
+              <strong>{enteredRoster.length}</strong>
+            </div>
+            <div className="roster-summary-card waiting">
+              <span>เข้ามาแล้ว ยังไม่เลือก</span>
+              <strong>{waitingRoster.length}</strong>
+            </div>
+            <div className="roster-summary-card missing">
+              <span>ยังไม่เข้าพิธี</span>
+              <strong>{missingRoster.length}</strong>
+            </div>
+          </div>
+
+          <div className="roster-columns">
+            <div className="roster-column">
+              <div className="roster-column-title">ยังไม่เข้าพิธี ({visibleMissingRoster.length})</div>
+              <div className="roster-chip-list missing">
+                {visibleMissingRoster.length ? visibleMissingRoster.map((entry) => (
+                  <span className="roster-chip missing" key={entry.code}>{entry.code}</span>
+                )) : (
+                  <div className="empty-state">ไม่มีจอมเวทค้างในตัวกรองนี้</div>
+                )}
+              </div>
+            </div>
+
+            <div className="roster-column">
+              <div className="roster-column-title">เข้าพิธีแล้ว ({visibleEnteredRoster.length})</div>
+              <div className="roster-status-list">
+                {visibleEnteredRoster.length ? visibleEnteredRoster.map((entry) => (
+                  <div className={`roster-status-row ${entry.claimed ? 'claimed' : 'waiting'}`} key={entry.code}>
+                    <span>{entry.code}</span>
+                    <strong>{entry.claimed ? `ผนึกเลข ${entry.number}` : 'รอเลือกศิลา'}</strong>
+                    <small>{entry.timestamp ? formatDateTime(entry.timestamp) : 'รอเวลา'}</small>
+                  </div>
+                )) : (
+                  <div className="empty-state">ยังไม่มีจอมเวทเข้าพิธีในตัวกรองนี้</div>
+                )}
+              </div>
+            </div>
+          </div>
+
+          {unknownRoster.length ? (
+            <div className="roster-unknown">
+              <strong>พบจอมเวทนอกบัญชี</strong>
+              <div className="roster-chip-list">
+                {unknownRoster.map((entry) => (
+                  <span className="roster-chip unknown" key={entry.code}>{entry.code} · {entry.status}</span>
+                ))}
+              </div>
+            </div>
+          ) : null}
+        </div>
 
         <div className="admin-dashboard-grid">
           <div className="admin-section">
@@ -645,8 +776,9 @@ function App() {
   const [selections, setSelections] = useState({});
   const [logs, setLogs] = useState(INITIAL_LOGS);
   const [archives, setArchives] = useState([]);
+  const [checkins, setCheckins] = useState([]);
   const [currentUser, setCurrentUser] = useState(getSavedParticipant);
-  const [isJoined, setIsJoined] = useState(() => Boolean(getSavedParticipant()));
+  const [isJoined, setIsJoined] = useState(() => EXPECTED_PARTICIPANT_SET.has(getSavedParticipant()));
   const [isAdminOpen, setIsAdminOpen] = useState(false);
   const [isAdminLoginOpen, setIsAdminLoginOpen] = useState(false);
   const [adminPassword, setAdminPassword] = useState('');
@@ -716,6 +848,85 @@ function App() {
           message: 'ระบบจะเปิดลานตามค่าเดิม กรุณาลองใหม่อีกครั้ง',
         });
       }
+    }
+  }, [showNotice]);
+
+  const refreshCheckins = useCallback(async ({ silent = true } = {}) => {
+    if (!adminPassword) return;
+
+    try {
+      const response = await fetch('/api/checkins', {
+        headers: {
+          Accept: 'application/json',
+          'x-admin-password': adminPassword,
+        },
+        cache: 'no-store',
+      });
+
+      const contentType = response.headers.get('content-type') || '';
+      if (isLocalPreview() && !contentType.includes('application/json')) {
+        setCheckins([]);
+        return;
+      }
+
+      if (response.status === 401) {
+        setCheckins([]);
+        return;
+      }
+
+      if (!response.ok) {
+        throw new Error(`Checkins failed: ${response.status}`);
+      }
+
+      const data = await response.json();
+      setCheckins(data.checkins || []);
+    } catch (error) {
+      console.warn('Checkin listener failed', error);
+      if (!silent) {
+        showNotice({
+          type: 'error',
+          title: 'โหลดบัญชีจอมเวทไม่สำเร็จ',
+          message: 'กรุณาลองเปิด Dashboard อีกครั้ง',
+        });
+      }
+    }
+  }, [adminPassword, showNotice]);
+
+  const recordCheckin = useCallback(async (participantCode) => {
+    try {
+      const response = await fetch('/api/checkins', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Accept: 'application/json',
+        },
+        body: JSON.stringify({ name: participantCode }),
+      });
+
+      const contentType = response.headers.get('content-type') || '';
+      if (isLocalPreview() && !contentType.includes('application/json')) {
+        return;
+      }
+
+      if (response.status === 400) {
+        showNotice({
+          type: 'warning',
+          title: 'ไม่พบจอมเวทในบัญชีพิธี',
+          message: 'กรุณาตรวจเลขพนักงานกับรายชื่อกิจกรรม MKTXCRC',
+        });
+        return;
+      }
+
+      if (!response.ok) {
+        throw new Error(`Checkin write failed: ${response.status}`);
+      }
+    } catch (error) {
+      console.warn('Checkin write failed', error);
+      showNotice({
+        type: 'warning',
+        title: 'บันทึกการเข้าพิธีไม่สำเร็จ',
+        message: 'เข้าหน้ากระดานได้ แต่ Admin อาจยังไม่เห็นสถานะล่าสุด',
+      });
     }
   }, [showNotice]);
 
@@ -824,6 +1035,18 @@ function App() {
   }, [refreshGateSettings]);
 
   useEffect(() => {
+    if (!isAdminOpen || !adminPassword) return undefined;
+
+    const initialCheck = window.setTimeout(() => refreshCheckins({ silent: false }), 0);
+    const interval = window.setInterval(() => refreshCheckins(), 15000);
+
+    return () => {
+      window.clearTimeout(initialCheck);
+      window.clearInterval(interval);
+    };
+  }, [adminPassword, isAdminOpen, refreshCheckins]);
+
+  useEffect(() => {
     const unsubSel = onSnapshot(selectionsCol, (snap) => {
       const sel = {};
       snap.forEach((document) => {
@@ -869,12 +1092,22 @@ function App() {
 
   const handleJoin = (e) => {
     e.preventDefault();
-    const trimmedUser = currentUser.trim();
-    if (trimmedUser) {
-      setCurrentUser(trimmedUser);
-      localStorage.setItem('lottery_currentUser', trimmedUser);
-      setIsJoined(true);
+    const trimmedUser = normalizeParticipantCode(currentUser);
+    if (!trimmedUser) return;
+
+    if (!EXPECTED_PARTICIPANT_SET.has(trimmedUser)) {
+      showNotice({
+        type: 'warning',
+        title: 'ไม่พบจอมเวทในบัญชีพิธี',
+        message: 'กรุณาตรวจเลขพนักงานกับรายชื่อกิจกรรม MKTXCRC',
+      });
+      return;
     }
+
+    setCurrentUser(trimmedUser);
+    localStorage.setItem('lottery_currentUser', trimmedUser);
+    setIsJoined(true);
+    recordCheckin(trimmedUser);
   };
 
   const handleChangeName = () => {
@@ -884,7 +1117,7 @@ function App() {
   };
 
   const handleSelectNumber = async (number) => {
-    const trimmedUser = currentUser.trim();
+    const trimmedUser = normalizeParticipantCode(currentUser);
     if (!trimmedUser) {
       showNotice({
         type: 'warning',
@@ -1049,6 +1282,7 @@ function App() {
       setAdminLoginError('');
       setIsAdminLoginOpen(false);
       setIsAdminOpen(true);
+      refreshCheckins({ silent: true });
     } catch (error) {
       console.error(error);
       setAdminLoginError('ตรวจรหัสไม่ได้ กรุณาลองใหม่อีกครั้ง');
@@ -1312,6 +1546,7 @@ function App() {
         selections={selections}
         logs={logs}
         archives={archives}
+        checkins={checkins}
         gateSettings={gateSettings}
         gateView={gateView}
         onGateUpdate={handleGateUpdate}

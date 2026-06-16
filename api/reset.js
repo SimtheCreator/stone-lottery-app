@@ -1,6 +1,6 @@
 import admin from 'firebase-admin';
 
-const COLLECTIONS_TO_RESET = ['selections', 'participants', 'logs'];
+const COLLECTIONS_TO_RESET = ['selections', 'participants', 'logs', 'checkins'];
 const ARCHIVE_COLLECTION = 'round_archives';
 const TEST_COLLECTIONS_TO_PURGE = [...COLLECTIONS_TO_RESET, ARCHIVE_COLLECTION];
 const BATCH_SIZE = 500;
@@ -65,12 +65,13 @@ const readCollection = async (db, collectionName) => {
 };
 
 const archiveCurrentRound = async (db) => {
-  const [selections, logs] = await Promise.all([
+  const [selections, logs, checkins] = await Promise.all([
     readCollection(db, 'selections'),
     readCollection(db, 'logs'),
+    readCollection(db, 'checkins'),
   ]);
 
-  if (!selections.length && !logs.length) {
+  if (!selections.length && !logs.length && !checkins.length) {
     return null;
   }
 
@@ -86,8 +87,15 @@ const archiveCurrentRound = async (db) => {
     createdAt: admin.firestore.FieldValue.serverTimestamp(),
     claimedCount: participants.length,
     availableCount: Math.max(0, 100 - participants.length),
+    checkedInCount: checkins.length,
     selectedNumbers: participants.map((participant) => participant.number),
     participants,
+    checkins: checkins
+      .map((checkin) => ({
+        name: checkin.name || checkin.id,
+        timestamp: checkin.timestamp || checkin.updatedAt || null,
+      }))
+      .sort((a, b) => String(a.name).localeCompare(String(b.name))),
     logs: logs
       .map((log) => ({
         text: log.text || '',

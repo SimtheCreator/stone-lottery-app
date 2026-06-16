@@ -2748,6 +2748,189 @@ body::after {
     margin-top: 12px;
 }
 
+.roster-section {
+    margin-bottom: 16px;
+}
+
+.roster-header {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 14px;
+    margin-bottom: 14px;
+}
+
+.roster-header p {
+    margin: -6px 0 0;
+    color: #cfc5ea;
+    font-size: 0.88rem;
+}
+
+.roster-search {
+    width: min(260px, 100%);
+    min-height: 42px;
+    border: 1px solid rgba(255, 212, 117, 0.22);
+    border-radius: 12px;
+    background: rgba(5, 3, 18, 0.38);
+    color: #fff4ce;
+    padding: 8px 12px;
+    outline: none;
+}
+
+.roster-search:focus {
+    border-color: rgba(255, 212, 117, 0.62);
+    box-shadow: 0 0 0 3px rgba(255, 212, 117, 0.1);
+}
+
+.roster-summary-grid {
+    display: grid;
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    gap: 10px;
+    margin-bottom: 14px;
+}
+
+.roster-summary-card {
+    min-height: 82px;
+    padding: 12px;
+    border: 1px solid rgba(255, 212, 117, 0.16);
+    border-radius: 14px;
+    background:
+        linear-gradient(145deg, rgba(255, 212, 117, 0.06), rgba(24, 7, 58, 0.34));
+}
+
+.roster-summary-card span {
+    display: block;
+    color: #d8cdf1;
+    font-size: 0.8rem;
+    font-weight: 800;
+}
+
+.roster-summary-card strong {
+    display: block;
+    margin-top: 8px;
+    color: var(--gold-primary);
+    font-family: var(--font-mystic);
+    font-size: 2rem;
+    line-height: 1;
+}
+
+.roster-summary-card.ready {
+    border-color: rgba(102, 255, 214, 0.22);
+}
+
+.roster-summary-card.waiting {
+    border-color: rgba(255, 212, 117, 0.32);
+}
+
+.roster-summary-card.missing {
+    border-color: rgba(255, 42, 95, 0.3);
+}
+
+.roster-columns {
+    display: grid;
+    grid-template-columns: minmax(0, 0.88fr) minmax(0, 1.12fr);
+    gap: 12px;
+}
+
+.roster-column {
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    border-radius: 14px;
+    padding: 12px;
+    background: rgba(0, 0, 0, 0.14);
+}
+
+.roster-column-title {
+    color: #fff4c7;
+    font-weight: 900;
+    margin-bottom: 10px;
+}
+
+.roster-chip-list {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    max-height: 230px;
+    overflow-y: auto;
+}
+
+.roster-chip {
+    display: inline-flex;
+    align-items: center;
+    min-height: 30px;
+    border: 1px solid rgba(255, 212, 117, 0.22);
+    border-radius: 999px;
+    padding: 5px 10px;
+    background: rgba(255, 255, 255, 0.05);
+    color: #f7efff;
+    font-weight: 800;
+    font-size: 0.84rem;
+}
+
+.roster-chip.missing {
+    border-color: rgba(255, 42, 95, 0.32);
+    background: rgba(255, 42, 95, 0.08);
+    color: #ffdbe4;
+}
+
+.roster-chip.unknown {
+    border-color: rgba(255, 179, 86, 0.34);
+    background: rgba(255, 179, 86, 0.1);
+}
+
+.roster-status-list {
+    display: grid;
+    gap: 8px;
+    max-height: 230px;
+    overflow-y: auto;
+}
+
+.roster-status-row {
+    display: grid;
+    grid-template-columns: 72px minmax(0, 1fr) auto;
+    gap: 10px;
+    align-items: center;
+    min-height: 40px;
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    border-radius: 10px;
+    padding: 8px 10px;
+    background: rgba(255, 255, 255, 0.04);
+}
+
+.roster-status-row span {
+    color: var(--gold-primary);
+    font-weight: 900;
+}
+
+.roster-status-row strong {
+    color: #f7efff;
+    font-size: 0.9rem;
+}
+
+.roster-status-row small {
+    color: #a49fc6;
+    font-size: 0.78rem;
+}
+
+.roster-status-row.claimed {
+    border-color: rgba(102, 255, 214, 0.18);
+}
+
+.roster-status-row.waiting {
+    border-color: rgba(255, 212, 117, 0.18);
+}
+
+.roster-unknown {
+    margin-top: 12px;
+    padding-top: 12px;
+    border-top: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.roster-unknown strong {
+    display: block;
+    color: #ffcf8a;
+    margin-bottom: 8px;
+}
+
 @keyframes boardOpeningSweep {
     0% { opacity: 0; transform: translateX(-120%); }
     18% { opacity: 0.78; }
@@ -2771,8 +2954,22 @@ body::after {
     }
 
     .gate-mode-grid,
-    .gate-time-grid {
+    .gate-time-grid,
+    .roster-summary-grid,
+    .roster-columns {
         grid-template-columns: 1fr;
+    }
+
+    .roster-header {
+        display: grid;
+    }
+
+    .roster-status-row {
+        grid-template-columns: 64px minmax(0, 1fr);
+    }
+
+    .roster-status-row small {
+        grid-column: 1 / -1;
     }
 }
 
