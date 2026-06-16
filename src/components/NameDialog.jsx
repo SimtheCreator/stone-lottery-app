@@ -5,13 +5,17 @@ function NameDialog({ isOpen, number, onClose, onSubmit }) {
   const inputRef = useRef(null);
 
   useEffect(() => {
-    if (isOpen) {
-      setName('');
-      setTimeout(() => {
-        inputRef.current?.focus();
-      }, 100);
-    }
-  }, [isOpen]);
+    if (!isOpen) return undefined;
+    const resetTimeout = setTimeout(() => setName(''), 0);
+    const focusTimeout = setTimeout(() => {
+      inputRef.current?.focus();
+    }, 100);
+
+    return () => {
+      clearTimeout(resetTimeout);
+      clearTimeout(focusTimeout);
+    };
+  }, [isOpen, number]);
 
   if (!isOpen) return null;
 

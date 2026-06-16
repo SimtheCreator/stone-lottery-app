@@ -2563,10 +2563,217 @@ body::after {
     animation: boardOpeningSweep 1.7s ease-out 0.18s both;
 }
 
+.board-gate-shell {
+    position: relative;
+}
+
+.board-gate-shell.locked .tablet-grid {
+    pointer-events: none;
+}
+
+.board-gate-shell.locked .tablet-tile:not(.claimed) {
+    opacity: 0.5;
+}
+
+.gate-lock-overlay {
+    position: absolute;
+    inset: 0;
+    z-index: 22;
+    display: grid;
+    place-items: center;
+    padding: 18px;
+    border-radius: 18px;
+    background:
+        linear-gradient(145deg, rgba(37, 13, 78, 0.84), rgba(15, 6, 42, 0.78)),
+        repeating-linear-gradient(132deg, rgba(255, 212, 117, 0.05) 0 1px, transparent 1px 10px);
+    border: 1px solid rgba(255, 212, 117, 0.24);
+}
+
+.gate-lock-panel {
+    width: min(520px, 100%);
+    padding: 22px;
+    border: 1px solid rgba(255, 212, 117, 0.32);
+    border-radius: 18px 12px 20px 12px;
+    background:
+        linear-gradient(145deg, rgba(91, 38, 140, 0.54), rgba(21, 9, 54, 0.78));
+    text-align: center;
+    box-shadow:
+        0 18px 38px rgba(11, 5, 28, 0.34),
+        inset 0 1px 0 rgba(255, 244, 210, 0.12);
+}
+
+.gate-lock-kicker,
+.gate-countdown span,
+.gate-close-badge span,
+.gate-status-card span,
+.gate-time-grid span {
+    color: #d8cdf1;
+    font-size: 0.78rem;
+    font-weight: 800;
+}
+
+.gate-lock-panel strong {
+    display: block;
+    margin: 8px 0;
+    color: var(--gold-primary);
+    font-family: var(--font-mystic);
+    font-size: clamp(1.35rem, 3vw, 2rem);
+    text-shadow: 0 0 14px rgba(255, 212, 117, 0.28);
+}
+
+.gate-lock-panel p {
+    color: #eee6ff;
+    margin: 0 auto 16px;
+    max-width: 420px;
+    line-height: 1.55;
+}
+
+.gate-countdown {
+    display: inline-flex;
+    flex-direction: column;
+    gap: 3px;
+    min-width: 178px;
+    padding: 10px 14px;
+    border: 1px solid rgba(255, 212, 117, 0.28);
+    border-radius: 12px;
+    background: rgba(8, 4, 22, 0.36);
+}
+
+.gate-countdown strong {
+    margin: 0;
+    color: #fff4c7;
+    font-size: clamp(1.45rem, 4vw, 2.35rem);
+}
+
+.gate-lock-panel small {
+    display: block;
+    color: #d8cdf1;
+    line-height: 1.5;
+}
+
+.gate-close-badge {
+    position: absolute;
+    top: 10px;
+    right: 10px;
+    z-index: 18;
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    padding: 8px 11px;
+    border: 1px solid rgba(255, 212, 117, 0.26);
+    border-radius: 999px;
+    background: rgba(25, 9, 55, 0.84);
+    box-shadow: 0 8px 18px rgba(11, 5, 28, 0.22);
+}
+
+.gate-close-badge strong {
+    color: var(--gold-primary);
+    font-family: var(--font-mystic);
+}
+
+.gate-admin-panel {
+    margin-bottom: 16px;
+}
+
+.gate-status-card {
+    display: grid;
+    gap: 4px;
+    padding: 12px;
+    border: 1px solid rgba(255, 212, 117, 0.18);
+    border-radius: 14px;
+    background: rgba(0, 0, 0, 0.18);
+}
+
+.gate-status-card strong {
+    color: var(--gold-primary);
+    font-family: var(--font-mystic);
+}
+
+.gate-status-card small {
+    color: #cfc5ea;
+}
+
+.gate-status-card.closed {
+    border-color: rgba(255, 42, 95, 0.28);
+}
+
+.gate-mode-grid {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 8px;
+    margin: 12px 0;
+}
+
+.gate-mode-grid button {
+    min-height: 40px;
+    border: 1px solid rgba(255, 212, 117, 0.2);
+    border-radius: 10px;
+    background: rgba(255, 255, 255, 0.06);
+    color: #f5edff;
+    cursor: pointer;
+}
+
+.gate-mode-grid button.active {
+    border-color: rgba(255, 212, 117, 0.72);
+    background: linear-gradient(145deg, rgba(255, 212, 117, 0.18), rgba(117, 60, 175, 0.24));
+    color: #fff4c7;
+}
+
+.gate-time-grid {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 10px;
+}
+
+.gate-time-grid label {
+    display: grid;
+    gap: 6px;
+}
+
+.gate-time-grid input {
+    width: 100%;
+    min-height: 42px;
+    border: 1px solid rgba(255, 212, 117, 0.2);
+    border-radius: 10px;
+    background: rgba(5, 3, 18, 0.38);
+    color: #fff4ce;
+    padding: 8px 10px;
+}
+
+.gate-action-row {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: flex-end;
+    gap: 10px;
+    margin-top: 12px;
+}
+
 @keyframes boardOpeningSweep {
     0% { opacity: 0; transform: translateX(-120%); }
     18% { opacity: 0.78; }
     100% { opacity: 0; transform: translateX(120%); }
+}
+
+@media (max-width: 700px) {
+    .gate-lock-overlay {
+        padding: 10px;
+    }
+
+    .gate-lock-panel {
+        padding: 16px;
+    }
+
+    .gate-close-badge {
+        top: 8px;
+        right: 8px;
+        gap: 6px;
+        padding: 7px 9px;
+    }
+
+    .gate-mode-grid,
+    .gate-time-grid {
+        grid-template-columns: 1fr;
+    }
 }
 
 @media (prefers-reduced-motion: reduce) {

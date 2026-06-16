@@ -5,7 +5,7 @@ const NUMBERS = Array.from({ length: 100 }, (_, i) => i.toString().padStart(2, '
 const CRACK_ANIMATION_MS = 2400;
 const INSCRIPTION_ANIMATION_MS = 1800;
 
-function StoneBoard({ selections, onSelect, currentUser, currentUserSelection, onWarn }) {
+function StoneBoard({ selections, onSelect, currentUser, currentUserSelection, gateView, onWarn }) {
   const [selectedNumber, setSelectedNumber] = useState(null);
   const [isConfirmOpen, setIsConfirmOpen] = useState(false);
   const [shatteringNum, setShatteringNum] = useState(null);
@@ -13,9 +13,22 @@ function StoneBoard({ selections, onSelect, currentUser, currentUserSelection, o
   const [inscribingNum, setInscribingNum] = useState(null);
 
   const currentUsers = Object.keys(selections).length;
+  const gate = gateView || { canSelect: true };
+  const isGateLocked = !gate.canSelect;
 
   const handleNumberClick = (num) => {
     if (shatteringNum || claimingNum) return;
+
+    if (isGateLocked) {
+      onWarn?.({
+        type: 'warning',
+        title: gate.title || 'ลานพิธียังไม่เปิด',
+        message: gate.countdownLabel
+          ? `${gate.message || 'กรุณารอเวลาเปิดลาน'} เปิดใน ${gate.countdownLabel}`
+          : gate.message || 'ยังไม่สามารถเลือกหมายเลขได้',
+      });
+      return;
+    }
 
     if (selections[num]) {
       onWarn?.({
@@ -215,36 +228,63 @@ function StoneBoard({ selections, onSelect, currentUser, currentUserSelection, o
         </strong>
       </div>
 
-      <div id="theme-tablet" className="tablet-grid">
-        {NUMBERS.map(num => {
-          const isTaken = !!selections[num];
-          const name = isTaken ? selections[num].name : '';
-          const stoneVariant = Number(num) % 5;
-          
-          return (
-            <button
-              type="button"
-              key={num} 
-              className={`tablet-tile stone-variant-${stoneVariant} ${isTaken ? 'claimed' : ''} ${claimingNum === num ? 'claiming' : ''} ${shatteringNum === num ? 'shattering' : ''} ${inscribingNum === num ? 'inscribing' : ''}`}
-              onClick={() => handleNumberClick(num)}
-              disabled={!!shatteringNum || !!claimingNum}
-              aria-disabled={isTaken || !!currentUserSelection || !!shatteringNum || !!claimingNum}
-              aria-label={isTaken ? `หมายเลข ${num} ถูกผนึกโดย ${name}` : `เลือกหมายเลข ${num}`}
-              title={isTaken ? `ถูกผนึกโดย: ${name}` : 'คลิกเพื่อเลือกหมายเลขนี้'}
-            >
-              <span className="stone-surface" aria-hidden="true"></span>
-              <span className="stone-runes" aria-hidden="true"></span>
-              <span className="eggshell-cracks" aria-hidden="true"></span>
-              <span className="number">{num}</span>
-              {isTaken && (
-                <span className="tile-owner">
-                  <span className="owner-label">จารึก</span>
-                  {name}
-                </span>
+      <div className={`board-gate-shell ${isGateLocked ? 'locked' : ''}`}>
+        {gate.canSelect && gate.closeCountdownLabel && (
+          <div className="gate-close-badge" aria-live="polite">
+            <span>ปิดลานใน</span>
+            <strong>{gate.closeCountdownLabel}</strong>
+          </div>
+        )}
+
+        <div id="theme-tablet" className="tablet-grid">
+          {NUMBERS.map(num => {
+            const isTaken = !!selections[num];
+            const name = isTaken ? selections[num].name : '';
+            const stoneVariant = Number(num) % 5;
+            
+            return (
+              <button
+                type="button"
+                key={num} 
+                className={`tablet-tile stone-variant-${stoneVariant} ${isTaken ? 'claimed' : ''} ${claimingNum === num ? 'claiming' : ''} ${shatteringNum === num ? 'shattering' : ''} ${inscribingNum === num ? 'inscribing' : ''}`}
+                onClick={() => handleNumberClick(num)}
+                disabled={!!shatteringNum || !!claimingNum || isGateLocked}
+                aria-disabled={isTaken || !!currentUserSelection || !!shatteringNum || !!claimingNum || isGateLocked}
+                aria-label={isTaken ? `หมายเลข ${num} ถูกผนึกโดย ${name}` : `เลือกหมายเลข ${num}`}
+                title={isGateLocked ? 'ยังไม่สามารถเลือกหมายเลขได้' : isTaken ? `ถูกผนึกโดย: ${name}` : 'คลิกเพื่อเลือกหมายเลขนี้'}
+              >
+                <span className="stone-surface" aria-hidden="true"></span>
+                <span className="stone-runes" aria-hidden="true"></span>
+                <span className="eggshell-cracks" aria-hidden="true"></span>
+                <span className="number">{num}</span>
+                {isTaken && (
+                  <span className="tile-owner">
+                    <span className="owner-label">จารึก</span>
+                    {name}
+                  </span>
+                )}
+              </button>
+            );
+          })}
+        </div>
+
+        {isGateLocked && (
+          <div className="gate-lock-overlay" aria-live="polite">
+            <div className="gate-lock-panel">
+              <span className="gate-lock-kicker">{gate.modeLabel || 'ประตูเวลา'}</span>
+              <strong>{gate.title || 'ลานพิธียังไม่เปิด'}</strong>
+              <p>{gate.message || 'กรุณารอผู้คุมวงเวทเปิดลานก่อนเลือกหมายเลข'}</p>
+              {gate.countdownLabel ? (
+                <div className="gate-countdown">
+                  <span>เปิดลานใน</span>
+                  <strong>{gate.countdownLabel}</strong>
+                </div>
+              ) : (
+                <small>สามารถกรอกรหัสพนักงานเข้ามารอได้ แต่ยังเลือกศิลาไม่ได้</small>
               )}
-            </button>
-          );
-        })}
+            </div>
+          </div>
+        )}
       </div>
 
       <ConfirmDialog

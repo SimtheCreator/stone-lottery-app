@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { addDoc, doc, onSnapshot, runTransaction, serverTimestamp } from 'firebase/firestore';
 import { archivesCol, db, logsCol, selectionsCol } from './firebase';
 import StoneBoard from './components/StoneBoard';
@@ -174,6 +174,123 @@ const isLocalPreview = () => (
   ['127.0.0.1', 'localhost', '::1'].includes(window.location.hostname)
 );
 
+const getSavedParticipant = () => {
+  try {
+    return localStorage.getItem('lottery_currentUser') || '';
+  } catch {
+    return '';
+  }
+};
+
+const DEFAULT_GATE_SETTINGS = {
+  mode: 'force-open',
+  openAt: null,
+  closeAt: null,
+  updatedAt: null,
+};
+
+const getDateMillis = (value) => {
+  if (!value) return null;
+  if (typeof value?.toMillis === 'function') return value.toMillis();
+  const millis = new Date(value).getTime();
+  return Number.isNaN(millis) ? null : millis;
+};
+
+const formatCountdown = (targetMillis, now) => {
+  const remaining = Math.max(0, targetMillis - now);
+  const totalSeconds = Math.floor(remaining / 1000);
+  const days = Math.floor(totalSeconds / 86400);
+  const hours = Math.floor((totalSeconds % 86400) / 3600);
+  const minutes = Math.floor((totalSeconds % 3600) / 60);
+  const seconds = totalSeconds % 60;
+
+  if (days > 0) {
+    return `${days} วัน ${String(hours).padStart(2, '0')}:${String(minutes).padStart(2, '0')}:${String(seconds).padStart(2, '0')}`;
+  }
+
+  return `${String(hours).padStart(2, '0')}:${String(minutes).padStart(2, '0')}:${String(seconds).padStart(2, '0')}`;
+};
+
+const toDateTimeLocalValue = (value) => {
+  const millis = getDateMillis(value);
+  if (!millis) return '';
+  const date = new Date(millis);
+  const localDate = new Date(date.getTime() - date.getTimezoneOffset() * 60000);
+  return localDate.toISOString().slice(0, 16);
+};
+
+const fromDateTimeLocalValue = (value) => (
+  value ? new Date(value).toISOString() : null
+);
+
+const getGateView = (gateSettings, now = Date.now()) => {
+  const settings = { ...DEFAULT_GATE_SETTINGS, ...(gateSettings || {}) };
+  const openAtMillis = getDateMillis(settings.openAt);
+  const closeAtMillis = getDateMillis(settings.closeAt);
+
+  if (settings.mode === 'force-open') {
+    return {
+      canSelect: true,
+      status: 'open',
+      title: 'ลานพิธีเปิดอยู่',
+      message: 'ผู้คุมวงเวทเปิดลานให้ผนึกหมายเลขได้ทันที',
+      modeLabel: 'เปิด manual',
+      closeCountdownLabel: '',
+      openAtMillis,
+      closeAtMillis,
+    };
+  }
+
+  if (settings.mode === 'force-closed') {
+    return {
+      canSelect: false,
+      status: 'closed',
+      title: 'ลานพิธีถูกปิดชั่วคราว',
+      message: 'ผู้คุมวงเวทปิดการเลือกหมายเลขไว้ก่อน',
+      modeLabel: 'ปิด manual',
+      countdownLabel: '',
+      openAtMillis,
+      closeAtMillis,
+    };
+  }
+
+  if (openAtMillis && now < openAtMillis) {
+    return {
+      canSelect: false,
+      status: 'before-open',
+      title: 'ลานพิธียังไม่เปิด',
+      message: 'กรอกรหัสพนักงานเข้ามารอได้ แต่ยังเลือกศิลาไม่ได้',
+      modeLabel: 'ตั้งเวลา',
+      countdownLabel: formatCountdown(openAtMillis, now),
+      openAtMillis,
+      closeAtMillis,
+    };
+  }
+
+  if (closeAtMillis && now >= closeAtMillis) {
+    return {
+      canSelect: false,
+      status: 'closed',
+      title: 'ลานพิธีปิดแล้ว',
+      message: 'หมดเวลาผนึกหมายเลขในรอบนี้',
+      modeLabel: 'ครบเวลาปิด',
+      openAtMillis,
+      closeAtMillis,
+    };
+  }
+
+  return {
+    canSelect: true,
+    status: 'open',
+    title: 'ลานพิธีเปิดอยู่',
+    message: 'เลือกศิลาเพื่อผนึกหมายเลขได้แล้ว',
+    modeLabel: 'ตั้งเวลา',
+    closeCountdownLabel: closeAtMillis && closeAtMillis > now ? formatCountdown(closeAtMillis, now) : '',
+    openAtMillis,
+    closeAtMillis,
+  };
+};
+
 const formatDateTime = (value) => {
   const millis = getTimeValue(value);
   if (!millis) return 'รอเวลาจากระบบ';
@@ -224,7 +341,92 @@ function RitualTopPanels({ currentUser, logs, claimedCount, availableCount }) {
   );
 }
 
-function AdminDashboard({ isOpen, onClose, selections, logs, archives, onReset, onPurgeTestData }) {
+function GateAdminPanel({ gateSettings, gateView, onGateUpdate }) {
+  const settings = { ...DEFAULT_GATE_SETTINGS, ...(gateSettings || {}) };
+  const [gateMode, setGateMode] = useState(settings.mode);
+  const [gateOpenAt, setGateOpenAt] = useState(toDateTimeLocalValue(settings.openAt));
+  const [gateCloseAt, setGateCloseAt] = useState(toDateTimeLocalValue(settings.closeAt));
+
+  const submitGateSettings = (mode = gateMode) => {
+    onGateUpdate({
+      mode,
+      openAt: fromDateTimeLocalValue(gateOpenAt),
+      closeAt: fromDateTimeLocalValue(gateCloseAt),
+    });
+  };
+
+  return (
+    <div className="admin-section gate-admin-panel">
+      <div className="admin-section-title">ประตูเวลาเปิดลาน</div>
+      <div className={`gate-status-card ${gateView.canSelect ? 'open' : 'closed'}`}>
+        <span>{gateView.modeLabel}</span>
+        <strong>{gateView.title}</strong>
+        <small>
+          {gateView.canSelect && gateView.closeCountdownLabel
+            ? `จะปิดใน ${gateView.closeCountdownLabel}`
+            : gateView.message}
+        </small>
+      </div>
+
+      <div className="gate-mode-grid" role="group" aria-label="โหมดเปิดปิดลานพิธี">
+        <button
+          className={gateMode === 'auto' ? 'active' : ''}
+          type="button"
+          onClick={() => setGateMode('auto')}
+        >
+          ใช้ตามเวลา
+        </button>
+        <button
+          className={gateMode === 'force-open' ? 'active' : ''}
+          type="button"
+          onClick={() => setGateMode('force-open')}
+        >
+          เปิด manual
+        </button>
+        <button
+          className={gateMode === 'force-closed' ? 'active' : ''}
+          type="button"
+          onClick={() => setGateMode('force-closed')}
+        >
+          ปิด manual
+        </button>
+      </div>
+
+      <div className="gate-time-grid">
+        <label>
+          <span>เวลาเปิดลาน</span>
+          <input
+            type="datetime-local"
+            value={gateOpenAt}
+            onChange={(event) => setGateOpenAt(event.target.value)}
+          />
+        </label>
+        <label>
+          <span>เวลาปิดลาน</span>
+          <input
+            type="datetime-local"
+            value={gateCloseAt}
+            onChange={(event) => setGateCloseAt(event.target.value)}
+          />
+        </label>
+      </div>
+
+      <div className="gate-action-row">
+        <button className="btn btn-secondary" type="button" onClick={() => submitGateSettings('force-open')}>
+          เปิดทันที
+        </button>
+        <button className="btn btn-secondary" type="button" onClick={() => submitGateSettings('force-closed')}>
+          ปิดทันที
+        </button>
+        <button className="btn btn-primary" type="button" onClick={() => submitGateSettings()}>
+          บันทึกประตูเวลา
+        </button>
+      </div>
+    </div>
+  );
+}
+
+function AdminDashboard({ isOpen, onClose, selections, logs, archives, gateSettings, gateView, onGateUpdate, onReset, onPurgeTestData }) {
   const claimedEntries = useMemo(() => (
     Object.entries(selections)
       .map(([number, data]) => ({ number, ...data }))
@@ -237,6 +439,11 @@ function AdminDashboard({ isOpen, onClose, selections, logs, archives, onReset, 
   const seasonProfiles = useMemo(() => (
     buildSeasonProfiles(selections, archives)
   ), [selections, archives]);
+  const gatePanelKey = [
+    gateSettings?.mode || DEFAULT_GATE_SETTINGS.mode,
+    getDateMillis(gateSettings?.openAt) || '',
+    getDateMillis(gateSettings?.closeAt) || '',
+  ].join('|');
 
   if (!isOpen) return null;
 
@@ -276,6 +483,13 @@ function AdminDashboard({ isOpen, onClose, selections, logs, archives, onReset, 
             <small>เก็บไว้หลัง reset</small>
           </div>
         </div>
+
+        <GateAdminPanel
+          key={gatePanelKey}
+          gateSettings={gateSettings}
+          gateView={gateView}
+          onGateUpdate={onGateUpdate}
+        />
 
         <div className="admin-dashboard-grid">
           <div className="admin-section">
@@ -431,13 +645,15 @@ function App() {
   const [selections, setSelections] = useState({});
   const [logs, setLogs] = useState(INITIAL_LOGS);
   const [archives, setArchives] = useState([]);
-  const [currentUser, setCurrentUser] = useState('');
-  const [isJoined, setIsJoined] = useState(false);
+  const [currentUser, setCurrentUser] = useState(getSavedParticipant);
+  const [isJoined, setIsJoined] = useState(() => Boolean(getSavedParticipant()));
   const [isAdminOpen, setIsAdminOpen] = useState(false);
   const [isAdminLoginOpen, setIsAdminLoginOpen] = useState(false);
   const [adminPassword, setAdminPassword] = useState('');
   const [adminLoginError, setAdminLoginError] = useState('');
   const [notice, setNotice] = useState(null);
+  const [gateSettings, setGateSettings] = useState(DEFAULT_GATE_SETTINGS);
+  const [gateNow, setGateNow] = useState(() => Date.now());
   const canvasRef = useRef(null);
 
   const claimedCount = Object.keys(selections).length;
@@ -454,15 +670,54 @@ function App() {
     const [number, data] = entry;
     return { number, ...data };
   }, [currentParticipantId, selections]);
+  const gateView = useMemo(() => (
+    getGateView(gateSettings, gateNow)
+  ), [gateNow, gateSettings]);
 
-  const showNotice = ({ type = 'warning', title, message }) => {
+  const showNotice = useCallback(({ type = 'warning', title, message }) => {
     setNotice({
       id: Date.now(),
       type,
       title,
       message,
     });
-  };
+  }, []);
+
+  const refreshGateSettings = useCallback(async ({ silent = true } = {}) => {
+    try {
+      const response = await fetch('/api/gate', {
+        headers: { Accept: 'application/json' },
+        cache: 'no-store',
+      });
+
+      if (isLocalPreview() && response.status === 404) {
+        setGateSettings(DEFAULT_GATE_SETTINGS);
+        return;
+      }
+
+      const contentType = response.headers.get('content-type') || '';
+      if (isLocalPreview() && !contentType.includes('application/json')) {
+        setGateSettings(DEFAULT_GATE_SETTINGS);
+        return;
+      }
+
+      if (!response.ok) {
+        throw new Error(`Gate settings failed: ${response.status}`);
+      }
+
+      const data = await response.json();
+      setGateSettings({ ...DEFAULT_GATE_SETTINGS, ...(data.settings || {}) });
+    } catch (error) {
+      console.warn('Gate settings listener failed', error);
+      if (!silent) {
+        showNotice({
+          type: 'error',
+          title: 'โหลดประตูเวลาไม่สำเร็จ',
+          message: 'ระบบจะเปิดลานตามค่าเดิม กรุณาลองใหม่อีกครั้ง',
+        });
+      }
+    }
+  }, [showNotice]);
 
   useEffect(() => {
     if (!notice) return undefined;
@@ -470,6 +725,11 @@ function App() {
     const timeout = window.setTimeout(() => setNotice(null), 4600);
     return () => window.clearTimeout(timeout);
   }, [notice]);
+
+  useEffect(() => {
+    const interval = window.setInterval(() => setGateNow(Date.now()), 1000);
+    return () => window.clearInterval(interval);
+  }, []);
 
   useEffect(() => {
     const canvas = canvasRef.current;
@@ -555,12 +815,13 @@ function App() {
   }, []);
 
   useEffect(() => {
-    const savedUser = localStorage.getItem('lottery_currentUser');
-    if (savedUser) {
-      setCurrentUser(savedUser);
-      setIsJoined(true);
-    }
-  }, []);
+    const initialCheck = window.setTimeout(() => refreshGateSettings(), 0);
+    const interval = window.setInterval(() => refreshGateSettings(), 15000);
+    return () => {
+      window.clearTimeout(initialCheck);
+      window.clearInterval(interval);
+    };
+  }, [refreshGateSettings]);
 
   useEffect(() => {
     const unsubSel = onSnapshot(selectionsCol, (snap) => {
@@ -604,7 +865,7 @@ function App() {
       unsubLog();
       unsubArchives();
     };
-  }, []);
+  }, [showNotice]);
 
   const handleJoin = (e) => {
     e.preventDefault();
@@ -629,6 +890,17 @@ function App() {
         type: 'warning',
         title: 'ยังไม่ได้ระบุตัวตนจอมเวท',
         message: 'กรุณาระบุตัวตนก่อนเลือกหมายเลข',
+      });
+      return false;
+    }
+
+    if (!gateView.canSelect) {
+      showNotice({
+        type: 'warning',
+        title: gateView.title,
+        message: gateView.countdownLabel
+          ? `${gateView.message} เปิดใน ${gateView.countdownLabel}`
+          : gateView.message,
       });
       return false;
     }
@@ -780,6 +1052,78 @@ function App() {
     } catch (error) {
       console.error(error);
       setAdminLoginError('ตรวจรหัสไม่ได้ กรุณาลองใหม่อีกครั้ง');
+    }
+  };
+
+  const handleGateUpdate = async (nextSettings) => {
+    if (!adminPassword) {
+      setIsAdminOpen(false);
+      setIsAdminLoginOpen(true);
+      return;
+    }
+
+    try {
+      const response = await fetch('/api/gate', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ password: adminPassword, ...nextSettings }),
+      });
+
+      const contentType = response.headers.get('content-type') || '';
+      if (isLocalPreview() && !contentType.includes('application/json')) {
+        showNotice({
+          type: 'warning',
+          title: 'ตั้งเวลาต้องใช้ระบบ Deploy',
+          message: 'หน้า local เปิด Dashboard ได้ แต่การตั้งเวลาเปิดปิดจริงต้องทำผ่าน Vercel API',
+        });
+        return;
+      }
+
+      if (response.status === 401) {
+        showNotice({
+          type: 'error',
+          title: 'รหัส Admin ไม่ถูกต้อง',
+          message: 'กรุณาตรวจสอบรหัสแล้วลองใหม่อีกครั้ง',
+        });
+        return;
+      }
+
+      if (response.status === 400) {
+        showNotice({
+          type: 'warning',
+          title: 'ตั้งเวลาไม่สำเร็จ',
+          message: 'กรุณาตรวจว่าเวลาเปิดต้องมาก่อนเวลาปิด',
+        });
+        return;
+      }
+
+      if (isLocalPreview() && response.status === 404) {
+        showNotice({
+          type: 'warning',
+          title: 'ตั้งเวลาต้องใช้ระบบ Deploy',
+          message: 'หน้า local เปิด Dashboard ได้ แต่การตั้งเวลาเปิดปิดจริงต้องทำผ่าน Vercel API',
+        });
+        return;
+      }
+
+      if (!response.ok) {
+        throw new Error(`Gate update failed: ${response.status}`);
+      }
+
+      const data = await response.json();
+      setGateSettings({ ...DEFAULT_GATE_SETTINGS, ...(data.settings || {}) });
+      showNotice({
+        type: 'success',
+        title: 'บันทึกประตูเวลาแล้ว',
+        message: 'สถานะเปิดปิดลานพิธีถูกอัปเดตเรียบร้อย',
+      });
+    } catch (error) {
+      console.error(error);
+      showNotice({
+        type: 'error',
+        title: 'บันทึกประตูเวลาไม่สำเร็จ',
+        message: 'กรุณาตรวจค่า Admin หรือ Firebase แล้วลองใหม่',
+      });
     }
   };
 
@@ -940,6 +1284,7 @@ function App() {
               onSelect={handleSelectNumber}
               currentUser={currentUser}
               currentUserSelection={currentUserSelection}
+              gateView={gateView}
               onWarn={showNotice}
             />
             <div className="ritual-footer-actions">
@@ -967,6 +1312,9 @@ function App() {
         selections={selections}
         logs={logs}
         archives={archives}
+        gateSettings={gateSettings}
+        gateView={gateView}
+        onGateUpdate={handleGateUpdate}
         onReset={handleReset}
         onPurgeTestData={handlePurgeTestData}
       />
