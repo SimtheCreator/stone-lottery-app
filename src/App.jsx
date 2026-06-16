@@ -7,6 +7,7 @@ import { EXPECTED_PARTICIPANTS, EXPECTED_PARTICIPANT_SET, normalizeParticipantCo
 const INITIAL_LOGS = [
   { id: 0, text: '🔮 แท่นพิธีเริ่มต้นขึ้นแล้ว เลือกเลขนำโชคของคุณได้เลย...', type: 'info' },
 ];
+const STONE_NUMBERS = Array.from({ length: 100 }, (_, index) => String(index).padStart(2, '0'));
 
 const getTimeValue = (value) => {
   if (typeof value === 'number') return value;
@@ -446,6 +447,19 @@ function AdminDashboard({ isOpen, onClose, selections, logs, archives, checkins,
   const claimedCount = claimedEntries.length;
   const availableCount = 100 - claimedCount;
   const latestClaim = claimedEntries[0];
+  const claimedNumberSet = useMemo(() => {
+    const set = new Set();
+    claimedEntries.forEach((entry) => {
+      const number = toStoneNumber(entry.number ?? entry.id);
+      if (number !== null) {
+        set.add(String(number).padStart(2, '0'));
+      }
+    });
+    return set;
+  }, [claimedEntries]);
+  const availableNumbers = useMemo(() => (
+    STONE_NUMBERS.filter((number) => !claimedNumberSet.has(number))
+  ), [claimedNumberSet]);
   const rosterFilterValue = normalizeParticipantCode(rosterFilter);
   const claimedMap = useMemo(() => {
     const map = new Map();
@@ -546,6 +560,23 @@ function AdminDashboard({ isOpen, onClose, selections, logs, archives, checkins,
           gateView={gateView}
           onGateUpdate={onGateUpdate}
         />
+
+        <div className="admin-section available-number-section">
+          <div className="available-number-header">
+            <div>
+              <div className="admin-section-title">ศิลาที่ยังไร้ผู้ครอบครอง</div>
+              <p>เลขที่ยังไม่มีจอมเวทผนึกในรอบนี้</p>
+            </div>
+            <strong>{availableNumbers.length}/100</strong>
+          </div>
+          <div className="available-number-grid" aria-label="หมายเลขที่ยังเลือกได้">
+            {availableNumbers.length ? availableNumbers.map((number) => (
+              <span className="available-number-chip" key={number}>{number}</span>
+            )) : (
+              <div className="empty-state">ศิลาทุกแผ่นถูกผนึกครบแล้ว</div>
+            )}
+          </div>
+        </div>
 
         <div className="admin-section roster-section">
           <div className="roster-header">
