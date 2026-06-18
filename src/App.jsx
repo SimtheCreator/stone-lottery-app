@@ -224,6 +224,21 @@ const fromDateTimeLocalValue = (value) => (
   value ? new Date(value).toISOString() : null
 );
 
+const getTodayDateInput = () => {
+  const today = new Date();
+  const localDate = new Date(today.getTime() - today.getTimezoneOffset() * 60000);
+  return localDate.toISOString().slice(0, 10);
+};
+
+const formatDrawDate = (value) => {
+  if (!value) return 'ยังไม่ระบุงวด';
+  const date = new Date(`${value}T00:00:00`);
+  if (Number.isNaN(date.getTime())) return value;
+  return new Intl.DateTimeFormat('th-TH', {
+    dateStyle: 'medium',
+  }).format(date);
+};
+
 const getGateView = (gateSettings, now = Date.now()) => {
   const settings = { ...DEFAULT_GATE_SETTINGS, ...(gateSettings || {}) };
   const openAtMillis = getDateMillis(settings.openAt);
@@ -427,7 +442,107 @@ function GateAdminPanel({ gateSettings, gateView, onGateUpdate }) {
   );
 }
 
-function AdminDashboard({ isOpen, onClose, selections, logs, archives, checkins, gateSettings, gateView, onGateUpdate, onReset, onPurgeTestData }) {
+function DrawResultPanel({ results, onSave }) {
+  const [drawDate, setDrawDate] = useState(getTodayDateInput);
+  const [twoDigit, setTwoDigit] = useState('');
+  const [firstPrize, setFirstPrize] = useState('');
+  const [note, setNote] = useState('');
+
+  const handleSubmit = (event) => {
+    event.preventDefault();
+    onSave({
+      drawDate,
+      twoDigit,
+      firstPrize,
+      note,
+    });
+  };
+
+  return (
+    <div className="admin-section draw-result-panel">
+      <div className="draw-result-header">
+        <div>
+          <div className="admin-section-title">บันทึกผลงวดรัฐบาล</div>
+          <p>กรอกหลังประกาศผล เพื่อเก็บเป็นสถิติเทียบกับศิลาที่จอมเวทเลือกในรอบนั้น</p>
+        </div>
+        <span>{results.length} งวด</span>
+      </div>
+
+      <form className="draw-result-form" onSubmit={handleSubmit}>
+        <label>
+          <span>วันที่งวด</span>
+          <input
+            type="date"
+            value={drawDate}
+            onChange={(event) => setDrawDate(event.target.value)}
+            required
+          />
+        </label>
+        <label>
+          <span>เลขท้าย 2 ตัว</span>
+          <input
+            type="text"
+            inputMode="numeric"
+            value={twoDigit}
+            onChange={(event) => setTwoDigit(event.target.value.replace(/\D/g, '').slice(0, 2))}
+            placeholder="เช่น 37"
+            maxLength={2}
+            required
+          />
+        </label>
+        <label>
+          <span>รางวัลที่ 1</span>
+          <input
+            type="text"
+            inputMode="numeric"
+            value={firstPrize}
+            onChange={(event) => setFirstPrize(event.target.value.replace(/\D/g, '').slice(0, 6))}
+            placeholder="ไม่บังคับ"
+            maxLength={6}
+          />
+        </label>
+        <label className="draw-result-note">
+          <span>หมายเหตุ</span>
+          <input
+            type="text"
+            value={note}
+            onChange={(event) => setNote(event.target.value)}
+            placeholder="เช่น ประกาศผลแล้ว / แก้ไขย้อนหลัง"
+            maxLength={200}
+          />
+        </label>
+        <button className="btn btn-primary" type="submit">
+          บันทึกผลงวด
+        </button>
+      </form>
+
+      <div className="draw-result-list">
+        {results.length ? results.slice(0, 8).map((result) => (
+          <div className="draw-result-row" key={result.id || result.drawDate}>
+            <div>
+              <strong>{formatDrawDate(result.drawDate)}</strong>
+              <span>เลขท้าย 2 ตัว: {result.twoDigit}</span>
+            </div>
+            <div>
+              <small>{result.firstPrize ? `รางวัลที่ 1: ${result.firstPrize}` : 'ยังไม่ได้กรอกรางวัลที่ 1'}</small>
+              <small>ตรงเลข {result.matchedCount || 0} จาก {result.claimedCount || 0} จารึก</small>
+            </div>
+            {result.matchedParticipants?.length ? (
+              <p>ผู้ตรงเลข: {result.matchedParticipants.map((participant) => participant.name).join(', ')}</p>
+            ) : (
+              <p>ยังไม่มีจอมเวทตรงเลขในงวดนี้</p>
+            )}
+            {result.note ? <em>{result.note}</em> : null}
+          </div>
+        )) : (
+          <div className="empty-state">ยังไม่มีผลงวดที่บันทึกไว้</div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+function AdminDashboard({ isOpen, onClose, selections, logs, archives, checkins, drawResults, gateSettings, gateView, onGateUpdate, onDrawResultSave, onReset, onPurgeTestData }) {
   const [rosterFilter, setRosterFilter] = useState('');
   const claimedEntries = useMemo(() => (
     Object.entries(selections)
@@ -546,6 +661,11 @@ function AdminDashboard({ isOpen, onClose, selections, logs, archives, checkins,
           gateSettings={gateSettings}
           gateView={gateView}
           onGateUpdate={onGateUpdate}
+        />
+
+        <DrawResultPanel
+          results={drawResults}
+          onSave={onDrawResultSave}
         />
 
         <div className="admin-section roster-section">
@@ -799,6 +919,7 @@ function App() {
   const [logs, setLogs] = useState(INITIAL_LOGS);
   const [archives, setArchives] = useState([]);
   const [checkins, setCheckins] = useState([]);
+  const [drawResults, setDrawResults] = useState([]);
   const [currentUser, setCurrentUser] = useState(getSavedParticipant);
   const [isJoined, setIsJoined] = useState(() => EXPECTED_PARTICIPANT_SET.has(getSavedParticipant()));
   const [isAdminOpen, setIsAdminOpen] = useState(false);
@@ -908,6 +1029,47 @@ function App() {
         showNotice({
           type: 'error',
           title: 'โหลดบัญชีจอมเวทไม่สำเร็จ',
+          message: 'กรุณาลองเปิด Dashboard อีกครั้ง',
+        });
+      }
+    }
+  }, [adminPassword, showNotice]);
+
+  const refreshDrawResults = useCallback(async ({ silent = true } = {}) => {
+    if (!adminPassword) return;
+
+    try {
+      const response = await fetch('/api/results', {
+        headers: {
+          Accept: 'application/json',
+          'x-admin-password': adminPassword,
+        },
+        cache: 'no-store',
+      });
+
+      const contentType = response.headers.get('content-type') || '';
+      if (isLocalPreview() && !contentType.includes('application/json')) {
+        setDrawResults([]);
+        return;
+      }
+
+      if (response.status === 401) {
+        setDrawResults([]);
+        return;
+      }
+
+      if (!response.ok) {
+        throw new Error(`Draw results failed: ${response.status}`);
+      }
+
+      const data = await response.json();
+      setDrawResults(data.results || []);
+    } catch (error) {
+      console.warn('Draw results listener failed', error);
+      if (!silent) {
+        showNotice({
+          type: 'error',
+          title: 'โหลดผลงวดไม่สำเร็จ',
           message: 'กรุณาลองเปิด Dashboard อีกครั้ง',
         });
       }
@@ -1059,14 +1221,20 @@ function App() {
   useEffect(() => {
     if (!isAdminOpen || !adminPassword) return undefined;
 
-    const initialCheck = window.setTimeout(() => refreshCheckins({ silent: false }), 0);
-    const interval = window.setInterval(() => refreshCheckins(), 15000);
+    const initialCheck = window.setTimeout(() => {
+      refreshCheckins({ silent: false });
+      refreshDrawResults({ silent: false });
+    }, 0);
+    const interval = window.setInterval(() => {
+      refreshCheckins();
+      refreshDrawResults();
+    }, 15000);
 
     return () => {
       window.clearTimeout(initialCheck);
       window.clearInterval(interval);
     };
-  }, [adminPassword, isAdminOpen, refreshCheckins]);
+  }, [adminPassword, isAdminOpen, refreshCheckins, refreshDrawResults]);
 
   useEffect(() => {
     const unsubSel = onSnapshot(selectionsCol, (snap) => {
@@ -1305,6 +1473,7 @@ function App() {
       setIsAdminLoginOpen(false);
       setIsAdminOpen(true);
       refreshCheckins({ silent: true });
+      refreshDrawResults({ silent: true });
     } catch (error) {
       console.error(error);
       setAdminLoginError('ตรวจรหัสไม่ได้ กรุณาลองใหม่อีกครั้ง');
@@ -1378,6 +1547,91 @@ function App() {
       showNotice({
         type: 'error',
         title: 'บันทึกประตูเวลาไม่สำเร็จ',
+        message: 'กรุณาตรวจค่า Admin หรือ Firebase แล้วลองใหม่',
+      });
+    }
+  };
+
+  const handleDrawResultSave = async (resultInput) => {
+    if (!adminPassword) {
+      setIsAdminOpen(false);
+      setIsAdminLoginOpen(true);
+      return;
+    }
+
+    const payload = {
+      drawDate: resultInput.drawDate,
+      twoDigit: String(resultInput.twoDigit || '').replace(/\D/g, '').slice(0, 2),
+      firstPrize: String(resultInput.firstPrize || '').replace(/\D/g, '').slice(0, 6),
+      note: String(resultInput.note || '').trim(),
+    };
+
+    if (!payload.drawDate || payload.twoDigit.length !== 2 || (payload.firstPrize && payload.firstPrize.length !== 6)) {
+      showNotice({
+        type: 'warning',
+        title: 'บันทึกผลงวดไม่สำเร็จ',
+        message: 'กรุณาใส่วันที่งวด เลขท้าย 2 ตัว และรางวัลที่ 1 ต้องเป็น 6 หลักถ้ากรอก',
+      });
+      return;
+    }
+
+    try {
+      const response = await fetch('/api/results', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ password: adminPassword, ...payload }),
+      });
+
+      const contentType = response.headers.get('content-type') || '';
+      if (isLocalPreview() && !contentType.includes('application/json')) {
+        showNotice({
+          type: 'warning',
+          title: 'บันทึกผลงวดต้องใช้ระบบ Deploy',
+          message: 'หน้า local เปิด Dashboard ได้ แต่การบันทึกผลงวดจริงต้องทำผ่าน Vercel API',
+        });
+        return;
+      }
+
+      if (response.status === 401) {
+        showNotice({
+          type: 'error',
+          title: 'รหัส Admin ไม่ถูกต้อง',
+          message: 'กรุณาตรวจสอบรหัสแล้วลองใหม่อีกครั้ง',
+        });
+        return;
+      }
+
+      if (response.status === 400) {
+        showNotice({
+          type: 'warning',
+          title: 'รูปแบบผลงวดไม่ถูกต้อง',
+          message: 'วันที่ต้องเป็นวันที่งวด และเลขท้ายต้องเป็น 2 หลัก',
+        });
+        return;
+      }
+
+      if (!response.ok) {
+        throw new Error(`Draw result save failed: ${response.status}`);
+      }
+
+      const data = await response.json();
+      setDrawResults((previous) => {
+        const next = [
+          data.result,
+          ...previous.filter((result) => result.drawDate !== data.result.drawDate),
+        ];
+        return next.sort((a, b) => String(b.drawDate).localeCompare(String(a.drawDate)));
+      });
+      showNotice({
+        type: 'success',
+        title: 'บันทึกผลงวดแล้ว',
+        message: `เลขท้าย 2 ตัว ${payload.twoDigit} ถูกเก็บเป็นสถิติเรียบร้อย`,
+      });
+    } catch (error) {
+      console.error(error);
+      showNotice({
+        type: 'error',
+        title: 'บันทึกผลงวดไม่สำเร็จ',
         message: 'กรุณาตรวจค่า Admin หรือ Firebase แล้วลองใหม่',
       });
     }
@@ -1569,9 +1823,11 @@ function App() {
         logs={logs}
         archives={archives}
         checkins={checkins}
+        drawResults={drawResults}
         gateSettings={gateSettings}
         gateView={gateView}
         onGateUpdate={handleGateUpdate}
+        onDrawResultSave={handleDrawResultSave}
         onReset={handleReset}
         onPurgeTestData={handlePurgeTestData}
       />
