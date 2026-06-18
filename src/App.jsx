@@ -7,7 +7,6 @@ import { EXPECTED_PARTICIPANTS, EXPECTED_PARTICIPANT_SET, normalizeParticipantCo
 const INITIAL_LOGS = [
   { id: 0, text: '🔮 แท่นพิธีเริ่มต้นขึ้นแล้ว เลือกเลขนำโชคของคุณได้เลย...', type: 'info' },
 ];
-const STONE_NUMBERS = Array.from({ length: 100 }, (_, index) => String(index).padStart(2, '0'));
 
 const getTimeValue = (value) => {
   if (typeof value === 'number') return value;
@@ -447,19 +446,6 @@ function AdminDashboard({ isOpen, onClose, selections, logs, archives, checkins,
   const claimedCount = claimedEntries.length;
   const availableCount = 100 - claimedCount;
   const latestClaim = claimedEntries[0];
-  const claimedNumberSet = useMemo(() => {
-    const set = new Set();
-    claimedEntries.forEach((entry) => {
-      const number = toStoneNumber(entry.number ?? entry.id);
-      if (number !== null) {
-        set.add(String(number).padStart(2, '0'));
-      }
-    });
-    return set;
-  }, [claimedEntries]);
-  const availableNumbers = useMemo(() => (
-    STONE_NUMBERS.filter((number) => !claimedNumberSet.has(number))
-  ), [claimedNumberSet]);
   const rosterFilterValue = normalizeParticipantCode(rosterFilter);
   const claimedMap = useMemo(() => {
     const map = new Map();
@@ -506,6 +492,7 @@ function AdminDashboard({ isOpen, onClose, selections, logs, archives, checkins,
   );
   const visibleMissingRoster = missingRoster.filter(matchesRosterFilter);
   const visibleEnteredRoster = enteredRoster.filter(matchesRosterFilter);
+  const visibleWaitingRoster = waitingRoster.filter(matchesRosterFilter);
   const seasonProfiles = useMemo(() => (
     buildSeasonProfiles(selections, archives)
   ), [selections, archives]);
@@ -561,23 +548,6 @@ function AdminDashboard({ isOpen, onClose, selections, logs, archives, checkins,
           onGateUpdate={onGateUpdate}
         />
 
-        <div className="admin-section available-number-section">
-          <div className="available-number-header">
-            <div>
-              <div className="admin-section-title">ศิลาที่ยังไร้ผู้ครอบครอง</div>
-              <p>เลขที่ยังไม่มีจอมเวทผนึกในรอบนี้</p>
-            </div>
-            <strong>{availableNumbers.length}/100</strong>
-          </div>
-          <div className="available-number-grid" aria-label="หมายเลขที่ยังเลือกได้">
-            {availableNumbers.length ? availableNumbers.map((number) => (
-              <span className="available-number-chip" key={number}>{number}</span>
-            )) : (
-              <div className="empty-state">ศิลาทุกแผ่นถูกผนึกครบแล้ว</div>
-            )}
-          </div>
-        </div>
-
         <div className="admin-section roster-section">
           <div className="roster-header">
             <div>
@@ -610,6 +580,27 @@ function AdminDashboard({ isOpen, onClose, selections, logs, archives, checkins,
             <div className="roster-summary-card missing">
               <span>ยังไม่เข้าพิธี</span>
               <strong>{missingRoster.length}</strong>
+            </div>
+          </div>
+
+          <div className="waiting-participant-section">
+            <div className="waiting-participant-header">
+              <div>
+                <div className="roster-column-title">เข้าพิธีแล้ว แต่ยังไม่ได้เลือกศิลา</div>
+                <p>อิงจากรหัสพนักงานที่กรอกเข้ามาแล้ว แมตช์กับรายการที่ยังไม่มีหมายเลขผนึก</p>
+              </div>
+              <strong>{visibleWaitingRoster.length}</strong>
+            </div>
+            <div className="waiting-participant-list">
+              {visibleWaitingRoster.length ? visibleWaitingRoster.map((entry) => (
+                <div className="waiting-participant-row" key={entry.code}>
+                  <span>{entry.code}</span>
+                  <strong>ยังไม่ได้เลือกเลข</strong>
+                  <small>{entry.timestamp ? formatDateTime(entry.timestamp) : 'รอเวลาเข้าพิธี'}</small>
+                </div>
+              )) : (
+                <div className="empty-state">ไม่มีจอมเวทที่เข้าพิธีแล้วแต่ยังไม่ได้เลือกในตัวกรองนี้</div>
+              )}
             </div>
           </div>
 
